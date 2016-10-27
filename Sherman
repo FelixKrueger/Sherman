@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-12, Felix Krueger (felix.krueger@babraham.ac.uk)
+## This program is Copyright (C) 2011-16, Felix Krueger (felix.krueger@babraham.ac.uk)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -1487,9 +1487,9 @@ sub process_command_line{
 
          Sherman - bisulfite-treated Read FastQ Simulator
 
-       Sherman version: $sherman_version Copyright 2011-12 Felix Krueger
+       Sherman version: $sherman_version Copyright 2011-16 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
-         www.bioinformatics.bbsrc.ac.uk/projects/sherman/
+         www.bioinformatics.babraham.ac.uk/projects/sherman/
 
 VERSION
     exit;

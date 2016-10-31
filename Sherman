@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.2';
+my $sherman_version = '0.1.7_dev';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -58,6 +58,10 @@ sub print_onscreen_summary{
     warn "Single-end read output format selected\n";
   }
   warn "sequence length:\t$sequence_length bp\n";
+
+  ### making the sequences 1bp longer than it needs to be so we can extract the sequence context again
+  ++$sequence_length;
+
   warn "number of sequences being generated:\t$number_of_sequences\n";
   if ($non_directional){
     warn "Non-directional sequences will be generated, i.e. sequences can originate from any of the four possible bisulfite PCR strands\n";
@@ -121,8 +125,9 @@ sub run_sequence_generation{
   my $fragment_length = $maxfrag-$minfrag;
 
   ### GENERATE QUALITY STRING (this quality will be used for all sequences)
+  # quality values are of the specified sequence length (and not 1 bp longer)
   my $phred33_quality =  generate_quality_values ();
-
+ 
   ### OPENING OUTPUT FILEHANDLES
   if ($paired_end){
     open (FASTQ_R1,'>','simulated_1.fastq') or die $!;
@@ -193,24 +198,30 @@ sub run_sequence_generation{
 	if ($paired_end){
 	  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
 	}
+	
+	if ($conversion_rate == 0){
+	  $seq_1 = substr ($seq_1,0,length ($seq_1) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	  if ($paired_end){
+	    $seq_2 = substr ($seq_2,0,length ($seq_2) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	  }
+	}
       }
     }
     else{ # SEQUENCE GENRATION: GENOMIC SEQUENCES (default)
 
       my $strand;
       ### we need to take slightly different routes for single-end and paired-end sequences
-
-      ### PAIRED-END
+       ### PAIRED-END
       if ($paired_end){
-	($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end();
-	
-	if ($strand eq 'plus'){
-	  $plus_strand_total++;
-	}
-	else{
-	  $minus_strand_total++;
-	}
-	
+	  
+	  ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end();
+	  if ($strand eq 'plus'){
+	      $plus_strand_total++;
+	  }
+	  else{
+	      $minus_strand_total++;
+	  }
+	  
 	### INTRODUCING SNPS
 	### we need to introduce SNPs before bisulfite conversion takes place
 	if ($number_of_SNPs > 0){
@@ -224,10 +235,15 @@ sub run_sequence_generation{
 	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
 	}
 	else{
-	  $seq_1 = bisulfite_transform_sequences_uniformly($seq_1) unless ($conversion_rate == 0);
-	  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
+	  if  ($conversion_rate == 0){
+	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	    $seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	  }
+	  else{
+	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
+	    $seq_2 = bisulfite_transform_sequences_uniformly($seq_2);
+	  }
 	}
-
 	### NON-DIRECTIONAL LIBRARIES
 	if ($non_directional){
 	  my $complemented = make_non_directional_sequences();
@@ -269,7 +285,12 @@ sub run_sequence_generation{
 	  $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1);
 	}
 	else{
-	  $seq_1 = bisulfite_transform_sequences_uniformly($seq_1) unless ($conversion_rate == 0);
+	  if  ($conversion_rate == 0){
+	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	  }
+	  else{
+	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
+	  }
 	}
 	### NON-DIRECTIONAL LIBRARIES
 	if ($non_directional){
@@ -326,6 +347,9 @@ sub run_sequence_generation{
 	$seq_2 = introduce_sequencing_errors($seq_2,$phred33_quality)
       }
     }
+
+    ### Also shortening the quality scores again
+    # $phred33_quality = substr($phred33_quality,0,length($phred33_quality)-1);
 
     ### PRINTING OUT SEQUENCES IN BASE SPACE
     if ($paired_end){
@@ -448,9 +472,12 @@ sub introduce_fixed_length_adapter_contamination{
 
 sub introduce_variable_length_adapter_contamination{
   my ($seq_1,$seq_2,$adapter_sequence) = @_;
+  # warn "Before seq1: ",length($seq_1)," bp long! $seq_1\n";
+  # warn "Before seq2: ",length($seq_2)," bp long! $seq_2\n";
 
   # now taking a random fragment length from @gaussian
   my $fragment = shift @gaussian;
+  my $seq_length = $sequence_length - 1; # the sequence has already been shortened by 1 bp again.
 
   die "Exiting for fragment $fragment\n"  unless (defined $fragment);
 
@@ -460,28 +487,31 @@ sub introduce_variable_length_adapter_contamination{
 
   if ($fragment < $sequence_length){
     ++$counting{'small'};
-    my $sub_length = $sequence_length-$fragment;
+    my $sub_length = $seq_length-$fragment;
+    #  warn "sub length is: $sub_length\n";
     my $sub_sequence = substr($adapter_sequence,0,$sub_length);
 
     ### replacing the last bases of the sequence with the substitution sequence
     if ($paired_end){
       substr($seq_1,-$sub_length,$sub_length,$sub_sequence);
       substr($seq_2,-$sub_length,$sub_length,$sub_sequence);
-      if (length$seq_1 < $sequence_length){
-	warn "The sequence is now only  ",length($seq_1)," bp long! $seq_1\n";
+      if (length$seq_1 < $seq_length){
+	warn "The sequence is now only ",length($seq_1)," bp long! $seq_1\n";
       }
-      if (length$seq_2 < $sequence_length){
-      	warn "The sequence is now only  ",length($seq_2)," bp long! $seq_2\n";
+      if (length$seq_2 < $seq_length){
+      	warn "The sequence is now only ",length($seq_2)," bp long! $seq_2\n";
       }
 
     }
     else{
       substr($seq_1,-$sub_length,$sub_length,$sub_sequence);
-      if (length$seq_1 < $sequence_length){
-	warn "The sequence is now only  ",length($seq_1)," bp long! $seq_1\n";
+      if (length$seq_1 < $seq_length){
+	warn "The sequence is now only ",length($seq_1)," bp long! $seq_1\n";
       }
     }
   }
+  #warn "After seq1: ",length($seq_1)," bp. $seq_1\n";
+  #warn "After seq2: ",length($seq_2)," bp. $seq_2\n";
 
   if ($paired_end){
     return ($seq_1,$seq_2);
@@ -519,9 +549,17 @@ sub gaussian_rand {
 sub print_sequences_out_basespace{
 
   my ($seq_1,$qual,$count,$coord,$seq_2) = @_;
+
   if (defined $coord){ # reads simulated from a genome
     ### paired-end
     if (defined $seq_2){
+
+      # warn length($seq_1),"\n";
+      # warn length($seq_2),"\n";
+      # warn length($qual),"\n\n";
+      # sleep(1);
+
+
       print FASTQ_R1 "\@${count}_${coord}_R1\n";
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
@@ -535,6 +573,9 @@ sub print_sequences_out_basespace{
 
     ### single-end
     else{
+      # warn length($seq_1),"\n";
+      # warn length($qual),"\n\n";
+      # sleep(1);
       print FASTQ "\@${count}_${coord}\n";
       print FASTQ "$seq_1\n";
       print FASTQ "+\n";
@@ -635,6 +676,9 @@ sub bisulfite_transform_sequences_uniformly{
   my $converted_C_count = 0;
 
   my $seq = shift;
+ 
+  ### shortening the sequence again by 1bp
+  $seq = substr($seq,0, (length($seq)-1));
 
   my @bases = split (//,$seq);
 
@@ -719,6 +763,10 @@ sub bisulfite_transform_sequences_context_specifically{
   $counting{'CH_total'} += $total_CH_count;
 
   my $bisulfite_converted_seq = join ("",@bases);
+
+  ### shortening the sequence again by 1bp
+  $bisulfite_converted_seq = substr($bisulfite_converted_seq,0, (length($bisulfite_converted_seq)-1));
+
   return $bisulfite_converted_seq;
 }
 
@@ -814,8 +862,8 @@ sub introduce_sequencing_errors{
   my @bases = split (//,$seq);
   my @quals = split (//,$qual);
 
-  unless(scalar@bases == scalar @quals){
-    die "The sequence lenght (",scalar@bases,") and length of the quality string (",scalar@quals,") were different which mustn't happen!\n\n";
+  unless(scalar@bases >= scalar @quals){
+    die "The sequence length (",scalar@bases,") was shorter than the length of the quality string (",scalar@quals,") which mustn't happen!\n\n";
   }
 
   foreach my $index (0..$#quals){
@@ -947,21 +995,20 @@ sub generate_quality_values{
 
   ### NO ERROR RATE SPECIFIED
   if ($error_rate == 0){
-    warn "Quality values will be constant throughout with a Phred score of $quality\n";
-
-    my @quals;
-
-    ### if no error rate was specified we will use a constant quality score for all bases ($quality), which was either determined by the user or which is 40 by default
-    foreach (1..$sequence_length){
-      push @quals,$quality;
-    }
-	
-    foreach my $qual(@quals){
-      $qual = convert_phred_score_into_quality_string($qual);
-    }
-
-    my $no_error_quality = join ("",@quals);
-    return $no_error_quality;
+      warn "Quality values will be constant throughout with a Phred score of $quality\n";
+      
+      my @quals;
+      ### if no error rate was specified we will use a constant quality score for all bases ($quality), which was either determined by the user or which is 40 by default
+      foreach (1..($sequence_length - 1)){ # sequence length has been incremented by 1
+	  push @quals,$quality;
+      }
+      
+      foreach my $qual(@quals){
+	  $qual = convert_phred_score_into_quality_string($qual);
+      }
+      
+      my $no_error_quality = join ("",@quals);
+      return $no_error_quality;
   }
 
   ### ERROR RATE WAS SPECIFIED
@@ -976,7 +1023,7 @@ sub generate_quality_values{
 
     my @quals;
 
-    for my $x (1..$sequence_length){
+    for my $x (1..($sequence_length - 1)){ # sequence length has been incremented by 1
       my $term1 = 0.034286*$x;
       my $term2 = 0.0009263*($x**2);
       my $term3 = $var*0.00001*($x**3);
@@ -1126,38 +1173,42 @@ sub generate_genomic_sequences {
   my $plus = 0;
   my $minus = 0;
   my $valid =0;
-
+  
   until ($valid == 1){
     my $random = int(rand($total_genome_length)+1);
-
     my $chromosome_length = 0;
 
     # finding out which chromosome has been hit
     foreach my $chr (sort keys %chromosomes){
-      $chromosome_length += length ($chromosomes{$chr});
-
-      if ( ($random+length($sequence_length)) < $chromosome_length){
-	last unless (length $chromosomes{$chr} > $chromosome_length-$random+$sequence_length);
-	$sequence = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
+	$chromosome_length += length ($chromosomes{$chr});
 	
-	# if the sequence contains any N's we are generating another random number without any Ns
-	last if ($sequence =~ /n/i);
-	last if (length($sequence) != $sequence_length);
-
-	# otherwise we randomly choose either a forward or reverse sequence and then return it
-	my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
-	
-	if ($strand == 0){
-	  $sequence = reverse_complement($sequence);
-	  ++$minus;
-	}	
-	else{
-	  ++$plus;
+	if ( ($random+length($sequence_length)) < $chromosome_length){
+	    last unless (length $chromosomes{$chr} > $chromosome_length-$random+$sequence_length);
+	    $sequence = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
+	    
+	    # if the sequence contains any N's we are generating another random number without any Ns
+	    last if ($sequence =~ /n/i);
+	    last if (length($sequence) != $sequence_length);
+	    
+	    # otherwise we randomly choose either a forward or reverse sequence and then return it
+	    my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
+	    
+	    if ($strand == 0){
+		$sequence = reverse_complement($sequence);
+		++$minus;
+	    }	
+	    else{
+		++$plus;
+	    }
+	    
+	    ++$valid;
+	    
+	    if ($plus == 1){
+		$coords = "${chr}:".($chromosome_length-$random + 1).'-'.($chromosome_length - $random + $sequence_length - 1);  # shorten sequence by 1 on 3' end
 	}
-	
-	++$valid;
-
-	$coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$sequence_length);
+	else{
+	  $coords = "${chr}:".($chromosome_length-$random + 1 + 1).'-'.($chromosome_length - $random + $sequence_length);  # shorten sequence by 1 on 5' end
+	}
 	last; # exiting once we found a valid sequence
       }
     }
@@ -1171,61 +1222,74 @@ sub generate_genomic_sequences {
 }
 
 sub generate_genomic_sequences_paired_end {
+    
+    my $fragment_length = int(rand($maxfrag-$minfrag)+$minfrag);
+    
+    my $seq_1;
+    my $seq_2;
+    my $coords;
+    my $plus = 0;
+    my $minus = 0;
+    my $valid = 0;
+    # warn "fragment_length: $fragment_length\n";
+    
+    until ($valid){
+	my $random = int(rand($total_genome_length)+1);
+	# warn "random: $random\n"; sleep(1);
+	my $chromosome_length = 0;
+	foreach my $chr (sort keys %chromosomes){
+	    $chromosome_length += length ($chromosomes{$chr});
+	    # warn "chr length: $chromosome_length\n";
+	    if ( ($random+$fragment_length) < $chromosome_length){
+		
+		last unless ($chromosome_length - $fragment_length > $random );
 
-  my $fragment_length = int(rand($maxfrag-$minfrag)+$minfrag);
+		my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
+		$seq_1 = substr ($chromosomes{$chr},$offset,$sequence_length);
+		$seq_2 = substr ($chromosomes{$chr},$offset + $fragment_length - $sequence_length,$sequence_length);
 
-  my $seq_1;
-  my $seq_2;
-  my $coords;
-  my $plus = 0;
-  my $minus = 0;
-  my $valid = 0;
+		### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
 
-  until ($valid == 1){
-    my $random = int(rand($total_genome_length)+1);
+		# if the sequences contain any N's we are generating another random number
+		if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
+		    warn "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
+		    last;
+		}
+		if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
+		    warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
+		    last;
+		}
+		
+		# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
+		my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
+		
+		if ($strand == 0){
+		    my $temp = reverse_complement($seq_1);
+		    $seq_1 = reverse_complement($seq_2);
+		    $seq_2 = $temp;
+		    ++$minus;
+		}	
+		else{
+		    ++$plus;
+		}
 
-    my $chromosome_length = 0;
-    foreach my $chr (sort keys %chromosomes){
-      $chromosome_length += length ($chromosomes{$chr});
-
-      if ( ($random+$fragment_length) < $chromosome_length){
-
- 	last unless (length $chromosomes{$chr} > $chromosome_length-$random+$fragment_length);
-
-	$seq_1 = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
-	$seq_2 = substr ($chromosomes{$chr},$chromosome_length-$random+$fragment_length-$sequence_length,$sequence_length);
-
-	### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
-
-	# if the sequences contain any N's we are generating another random number
-	last if ($seq_1 =~ /n/i or $seq_2 =~ /n/i);
- 	last if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length);
-	
- 	# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
-	my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
-	
- 	if ($strand == 0){
-	  my $temp = reverse_complement($seq_1);
-	  $seq_1 = reverse_complement($seq_2);
-	  $seq_2 = $temp;
-	  ++$minus;
-  	}	
-	else{
-	  ++$plus;
+		$coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);	
+		++$valid;
+		last; # exiting once we found a valid sequence pair
+	    }
+	    else{
+		# warn "This shouldn't\n";
+	    }
+	    # warn "Proceed to next chr\n\n";
 	}
-
-	$coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);	
-	++$valid;
-	last; # exiting once we found a valid sequence pair
-      }
     }
-  }
-  if($plus == 1){
-    return ($seq_1,$seq_2,'plus',$coords);
-  }
-  else{
-    return ($seq_1,$seq_2,'minus',$coords);
-  }
+    
+    if($plus == 1){
+	return ($seq_1,$seq_2,'plus',$coords);
+    }
+    else{
+	return ($seq_1,$seq_2,'minus',$coords);
+    }
 }
 
 
@@ -1490,6 +1554,7 @@ sub process_command_line{
        Sherman version: $sherman_version Copyright 2011-16 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
          www.bioinformatics.babraham.ac.uk/projects/sherman/
+              https://github.com/FelixKrueger/Sherman
 
 VERSION
     exit;
@@ -1686,7 +1751,7 @@ VERSION
       die "Please select sensible fragment lengths (up to a maximum of 2000bp) (currently selected min: $minfrag/ max: $maxfrag)\n\n";
     }
     if ( ($maxfrag-$minfrag) <= $length){
-      die "Please select a fragment lenght that is longer than the read length\n\n";
+      die "Please select a fragment length that is longer than the read length\n\n";
     }
   }
   else{
@@ -1781,7 +1846,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 05 September 2012.
+Last update: 31 October 2016.
 
 
 HELP

@@ -804,7 +804,7 @@ sub make_non_directional_sequences{
 
 sub introduce_SNPs{
   my $seq = shift;
-  my $SNPs_introduced =0;
+  my $SNPs_introduced = 0;
   my @bases = split (//,$seq);
 
   ### first determining the positions at which a SNP will be introduced
@@ -812,7 +812,7 @@ sub introduce_SNPs{
   my $SNP_position_count = 0;
 
   while ($SNP_position_count < $number_of_SNPs){
-    my $random= int(rand(length($seq))); # this will be a number between 0 and the read length-1, which we can use directly as index positions
+    my $random = int(rand(length($seq))); # this will be a number between 0 and the read length-1, which we can use directly as index positions
     unless (exists $snps{$random}){
       $snps{$random} = 1;
       ++$SNP_position_count;
@@ -836,8 +836,11 @@ sub introduce_SNPs{
     elsif ($base_to_be_substituted eq 'G'){
       $random += 3;
     }
+    elsif($base_to_be_substituted eq 'N'){
+	# not doing anything but using $random only
+    }
     else{
-      die "base to be substituted was \"$base_to_be_substituted\"\n";
+	die "base to be substituted was \"$base_to_be_substituted\"\n";
     }
     $random %= 4;
     ++$SNPs_introduced;
@@ -1187,7 +1190,7 @@ sub generate_genomic_sequences {
 	    $sequence = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
 	    
 	    # if the sequence contains any N's we are generating another random number without any Ns
-	    last if ($sequence =~ /n/i);
+	    # last if ($sequence =~ /n/i);
 	    last if (length($sequence) != $sequence_length);
 	    
 	    # otherwise we randomly choose either a forward or reverse sequence and then return it
@@ -1568,7 +1571,7 @@ VERSION
       print_helpfile();
       exit;
     }
-    if ($length < 0 or $length > 300){
+    if ($length < 0 or $length > 300000){
       warn "A sequence shorter than 0 bp or longer than 300bp? ... Please respecify!\n";
       print_helpfile();
       exit;
@@ -1718,8 +1721,8 @@ VERSION
     warn "Genome folder was specified as $genome_folder\n";
   }
   else{
-    $genome_folder = '/bi/scratch/Genomes/Mouse/GRCm38/';
-    warn "Using the default genome folder /bi/scratch/Genomes/Mouse/GRCm38/ \n";
+    $genome_folder = '/data/public/Genomes/Mouse/NCBIM37/';
+    warn "Using the default genome folder /data/public/Genomes/Mouse/NCBIM37/ \n";
   }
 
   ### NON-DIRECTIONAL BS-SEQ LIBRARIES
@@ -1775,7 +1778,7 @@ BASIC ATTRIBUTES:
 
 --genome_folder <path/to/folder>  Enter the genome folder you wish to use to extract sequences from. The genomic
                                   coordinates are printed into the read-ID line. Accepted formats are FastA files
-                                  ending with '.fa' or '.fasta'. Default path: /bi/scratch/Genomes/Mouse/GRCm38/.
+                                  ending with '.fa' or '.fasta'. Default path: /data/public/Genomes/Mouse/NCBIM37/.
                                   Default: ON.
 
 --random                          The sequences will be generated with entirely random base composition

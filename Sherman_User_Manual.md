@@ -1,6 +1,8 @@
 # SHERMAN - Bisulfite-Read Simulator
-________________________________________________________________
+
 09 October 2017
+
+This is a list of all available options. A similar help can be seen by typing `Sherman --help` on the command line.
 
 ### BASIC ATTRIBUTES:
 
@@ -14,7 +16,7 @@ ________________________________________________________________
 
 `--genome_folder <path/to/genome/folder>`
 
-- Enter the genome folder you wish to use to extract sequences from. The genomic coordinates are being printed into the read-ID field in addition to the read count number. Accepted formats are FastA files ending with `.fa` or `.fasta`. Default path: /data/public/Genomes/Mouse/NCBIM37/. Default: ON.
+- Enter the genome folder you wish to use to extract sequences from. The genomic coordinates are being printed into the read-ID field in addition to the read count number. Accepted formats are FastA files ending with `.fa` or `.fasta`. Default path: /bi/scratch/Genomes/Mouse/GRCm38/. Default: ON.
 
 `--random`
 
@@ -22,11 +24,11 @@ ________________________________________________________________
 
 `-q/--quality`
 
-- The default quality for all positions if error rate is set to 0% or if SNPs are to be introduced. Default:
-40.
+- The default quality for all positions if error rate is set to 0% or if SNPs are to be introduced. Default: 40.
+
 `-pe/--paired_end` 
 
-- Will create paired-end read files with the names simulated_1.fastq and simulated_2.fastq. The minimum and maximum fragment sizes can be adjusted with the options `-I/--minfrag` or `-X/--maxfrag`. Default: OFF.
+- Will create paired-end read files with the names `simulated_1.fastq` and `simulated_2.fastq`. The minimum and maximum fragment sizes can be adjusted with the options `-I/--minfrag` and/or `-X/--maxfrag`. Default: OFF.
 
 `-I/--minfrag <int>`
 
@@ -60,11 +62,11 @@ ________________________________________________________________
 
 `-s/--snps <int>`
 
-The number of SNPs to be introduced. This value can be anything between 1 and the total sequence length. Default: 0. Introducing SNPs will always assume an error rate of 0%, the default quality for all bases can be specified with (`-q/--quality`).
+- The number of SNPs to be introduced. This value can be anything between 1 and the total sequence length. Default: 0. Introducing SNPs will always assume an error rate of 0%, the default quality for all bases can be specified with (`-q/--quality`).
 
 `-e/--error_rate <float>`
 
-`The error rate in %. This can be anything between 0 and 60%. If the error rate is selected as 0%, no sequencing errors will be introduced (even though a Phred score of 40 formally translates into an error rate of 0.01%). The error rate will be a mean error rate per bp whereby the error curve follows an exponential decay model. This means that an error rate of 0.1% will - overall - introduce
+- The error rate in %. This can be anything between 0 and 60%. If the error rate is selected as 0%, no sequencing errors will be introduced (even though a Phred score of 40 formally translates into an error rate of 0.01%). The error rate will be a mean error rate per bp whereby the error curve follows an exponential decay model. This means that an error rate of 0.1% will - overall - introduce
 sequencing errors roughly every 1 in 1000 bases, whereby the 5' end of a read is much less likely to harbour errors than bases towards the 3' end. 
 
 `--fixed_length_adapter <int>`

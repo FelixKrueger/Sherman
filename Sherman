@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-16, Felix Krueger (felix.krueger@babraham.ac.uk)
+## This program is Copyright (C) 2011-18, Felix Krueger (felix.krueger@babraham.ac.uk)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -1252,11 +1252,11 @@ sub generate_genomic_sequences_paired_end {
 
 		# if the sequences contain any N's we are generating another random number
 		if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
-		    warn "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
+		    # warn "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
 		    last;
 		}
 		if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
-		    warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
+		    # warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
 		    last;
 		}
 		

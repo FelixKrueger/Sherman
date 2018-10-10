@@ -175,19 +175,19 @@ sub run_sequence_generation{
 
     ### SEQUENCE GENERATION: RANDOM
     if ($random){
-      $seq_1 = generate_random_sequences();
-      if ($paired_end){
-	$seq_2 = generate_random_sequences();
-      }
+		$seq_1 = generate_random_sequences();
+		if ($paired_end){
+			$seq_2 = generate_random_sequences();
+		}
 
-      ### INTRODUCING SNPS
-      ### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
+		### INTRODUCING SNPS
+		### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
 
-      ### NON-DIRECTIONAL LIBRARIES
-      ### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
+		### NON-DIRECTIONAL LIBRARIES
+		### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
 
-      ### BISULFITE CONVERSION
-      if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+		### BISULFITE CONVERSION
+		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
 	$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
 	if ($paired_end){	
 	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
@@ -209,40 +209,40 @@ sub run_sequence_generation{
     }
     else{ # SEQUENCE GENRATION: GENOMIC SEQUENCES (default)
 
-      my $strand;
-      ### we need to take slightly different routes for single-end and paired-end sequences
-       ### PAIRED-END
-      if ($paired_end){
-	  
-	  ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end();
-	  if ($strand eq 'plus'){
-	      $plus_strand_total++;
-	  }
-	  else{
-	      $minus_strand_total++;
-	  }
-	  
-	### INTRODUCING SNPS
-	### we need to introduce SNPs before bisulfite conversion takes place
-	if ($number_of_SNPs > 0){
-	  $seq_1 = introduce_SNPs($seq_1);
-	  $seq_2 = introduce_SNPs($seq_2);
-	}
-	
-	### BISULFITE CONVERSION
-	if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-	  $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
-	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
-	}
-	else{
-	  if  ($conversion_rate == 0){
-	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	    $seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  }
-	  else{
-	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
-	    $seq_2 = bisulfite_transform_sequences_uniformly($seq_2);
-	  }
+		my $strand;
+		### we need to take slightly different routes for single-end and paired-end sequences
+		### PAIRED-END
+		if ($paired_end){
+		    
+		($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
+		if ($strand eq 'plus'){
+			$plus_strand_total++;
+		}
+		else{
+			$minus_strand_total++;
+		}
+		# warn "$genomic_coords\n"; sleep(1);
+		### INTRODUCING SNPS
+		### we need to introduce SNPs before bisulfite conversion takes place
+		if ($number_of_SNPs > 0){
+			$seq_1 = introduce_SNPs($seq_1);
+			$seq_2 = introduce_SNPs($seq_2);
+		}
+		
+		### BISULFITE CONVERSION
+		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+			$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
+			$seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
+		}
+		else{
+		if  ($conversion_rate == 0){
+			$seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+			$seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+		}
+		else{
+			$seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
+			$seq_2 = bisulfite_transform_sequences_uniformly($seq_2);
+		}
 	}
 	### NON-DIRECTIONAL LIBRARIES
 	if ($non_directional){
@@ -1222,6 +1222,7 @@ sub generate_genomic_sequences {
 }
 
 sub generate_genomic_sequences_paired_end {
+    my $conversion_rate = shift;
     
     my $fragment_length = int(rand($maxfrag-$minfrag)+$minfrag);
     
@@ -1231,63 +1232,73 @@ sub generate_genomic_sequences_paired_end {
     my $plus = 0;
     my $minus = 0;
     my $valid = 0;
-    # warn "fragment_length: $fragment_length\n";
+	# warn "fragment_length: $fragment_length\n";
     
     until ($valid){
-	my $random = int(rand($total_genome_length)+1);
-	# warn "random: $random\n"; sleep(1);
-	my $chromosome_length = 0;
-	foreach my $chr (sort keys %chromosomes){
-	    $chromosome_length += length ($chromosomes{$chr});
-	    # warn "chr length: $chromosome_length\n";
-	    if ( ($random+$fragment_length) < $chromosome_length){
-		
-		last unless ($chromosome_length - $fragment_length > $random );
-
-		my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
-		$seq_1 = substr ($chromosomes{$chr},$offset,$sequence_length);
-		$seq_2 = substr ($chromosomes{$chr},$offset + $fragment_length - $sequence_length,$sequence_length);
-
-		### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
-
-		# if the sequences contain any N's we are generating another random number
-		if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
-		    # warn "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
-		    last;
-		}
-		if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
-		    # warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
-		    last;
-		}
-		
-		# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
-		my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
-		
-		if ($strand == 0){
-		    my $temp = reverse_complement($seq_1);
-		    $seq_1 = reverse_complement($seq_2);
-		    $seq_2 = $temp;
-		    ++$minus;
-		}	
-		else{
-		    ++$plus;
-		}
-
-		$coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);	
-		++$valid;
-		last; # exiting once we found a valid sequence pair
-	    }
-	    else{
-		# warn "This shouldn't\n";
-	    }
-	    # warn "Proceed to next chr\n\n";
-	}
-    }
+		my $random = int(rand($total_genome_length)+1);
+		# warn "\n\nNEW FRAGMENT:\nrandom: $random\n";
+		# warn "fragment_length: $fragment_length\n";
     
+		my $chromosome_length = 0;
+		
+		foreach my $chr (sort keys %chromosomes){
+			$chromosome_length += length ($chromosomes{$chr});
+			# warn "total chr length: $chromosome_length\n";
+			
+			if ( ($random+$fragment_length) < $chromosome_length){
+			
+				last unless ($chromosome_length - $fragment_length > $random );
+
+				my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
+				# warn "Offset: $offset\n";
+				$seq_1 = substr ($chromosomes{$chr},$offset,$sequence_length);
+				$seq_2 = substr ($chromosomes{$chr},$offset + $fragment_length - $sequence_length,$sequence_length);
+
+				### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
+
+				# if the sequences contain any N's we are generating another random number
+				if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
+					# warn "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
+					last;
+				}
+				if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
+					# warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
+					last;
+				}
+			
+				# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
+				my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
+				
+				if ($strand == 0){
+					my $temp = reverse_complement($seq_1);
+					$seq_1 = reverse_complement($seq_2);
+					$seq_2 = $temp;
+					++$minus;
+					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);       
+				      
+				}
+				else{
+					++$plus; # plus strand alignments are fine like this
+					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 1);
+				}
+
+				# $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
+				# warn "found one! Setting coords to $coords\n";
+				++$valid;
+				last; # exiting once we found a valid sequence pair
+			}
+			else{
+				# warn "Random number ($random) + fragment length ($fragment_length) is beyond the end of the current chromosome\n";
+			}
+			# warn "Proceed to next chr\n\n";
+		}
+    }
     if($plus == 1){
-	return ($seq_1,$seq_2,'plus',$coords);
+	# warn "Returning coords: $coords, strand: +\n";
+	return ($seq_1,$seq_2,'plus',$coords); 
     }
     else{
+	# warn "Returning coords: $coords, strand: -\n";     
 	return ($seq_1,$seq_2,'minus',$coords);
     }
 }

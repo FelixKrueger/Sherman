@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.7_dev';
+my $sherman_version = '0.1.8';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -1560,9 +1560,9 @@ sub process_command_line{
   if ($version){
     print << "VERSION";
 
-         Sherman - bisulfite-treated Read FastQ Simulator
+         Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
-       Sherman version: $sherman_version Copyright 2011-16 Felix Krueger
+       Sherman version: $sherman_version Copyright 2011-18 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
          www.bioinformatics.babraham.ac.uk/projects/sherman/
               https://github.com/FelixKrueger/Sherman
@@ -1857,7 +1857,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 31 October 2016.
+Last update: 16 October 2018.
 
 
 HELP

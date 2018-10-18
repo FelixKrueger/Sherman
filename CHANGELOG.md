@@ -1,4 +1,4 @@
-## Sherman v0.1.8 (16 10 2018)
+## 16-10-2018: Sherman Version v0.1.8 released
 
 - Fixed the coordinates of extracted paired-end sequences
 - Fixed the chromosomal extraction of sequence for paired-end files

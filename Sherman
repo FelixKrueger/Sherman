@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-18, Felix Krueger (felix.krueger@babraham.ac.uk)
+## This program is Copyright (C) 2011-19, Felix Krueger (felix.krueger@babraham.ac.uk)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.8';
+my $sherman_version = '0.1.8_dev';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -1842,6 +1842,10 @@ CONTAMINANTS:
                                   - overall - introduce sequencing errors roughly every 1 in 1000 bases, whereby
                                   the 5' end of a read is much less likely to harbour errors than
                                   bases towards the 3' end.
+                                  The process of working out the slope of the error curve should not take more than
+                                  1 second, so if you seem to get stuck at this step please increase the error rate
+                                  or decrease the read length (the curve fitting was done on ~2011 Illumina data
+                                  and might not perform all that well on modern (2019+) data. Sorry about that.
 
 --fixed_length_adapter <int>      Replaces the most 3' <int> bp of each read with Illumina adapter
                                   sequence. Sherman is currently using the Illumina Paired End PCR Primer 2
@@ -1857,7 +1861,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 16 October 2018.
+Last update: 17 January 2019.
 
 
 HELP

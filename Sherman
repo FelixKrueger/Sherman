@@ -43,7 +43,7 @@ my %counting =(
 my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
-my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag) = process_command_line();
+my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -130,23 +130,23 @@ sub run_sequence_generation{
  
   ### OPENING OUTPUT FILEHANDLES
   if ($paired_end){
-    open (FASTQ_R1,'>','simulated_1.fastq') or die $!;
-    open (FASTQ_R2,'>','simulated_2.fastq') or die $!;
+    open (FASTQ_R1,'>',"${output_dir}simulated_1.fastq") or die $!;
+    open (FASTQ_R2,'>',"${output_dir}simulated_2.fastq") or die $!;
   }
   else{
-    open (FASTQ,'>','simulated.fastq') or die $!;
+    open (FASTQ,'>',"${output_dir}simulated.fastq") or die $!;
   }
 
   if ($colorspace){
     if ($paired_end){
-      open (READS_R1,'>','simulated_1.csfasta') or die $!;
-      open (QUALS_R1,'>','simulated_1_QV.qual') or die $!;
-      open (READS_R2,'>','simulated_2.csfasta') or die $!;
-      open (QUALS_R2,'>','simulated_2_QV.qual') or die $!;
+      open (READS_R1,'>',"${output_dir}simulated_1.csfasta") or die $!;
+      open (QUALS_R1,'>',"${output_dir}simulated_1_QV.qual") or die $!;
+      open (READS_R2,'>',"${output_dir}simulated_2.csfasta") or die $!;
+      open (QUALS_R2,'>',"${output_dir}simulated_2_QV.qual") or die $!;
     }
     else{
-      open (READS,'>','simulated.csfasta') or die $!;
-      open (QUALS,'>','simulated_QV.qual') or die $!;
+      open (READS,'>',"${output_dir}simulated.csfasta") or die $!;
+      open (QUALS,'>',"${output_dir}simulated_QV.qual") or die $!;
     }
   }
 
@@ -1321,7 +1321,7 @@ sub generate_random_sequences {
 sub read_genome_into_memory{
 
   ## reading in and storing the specified genome in the %chromosomes hash
-  chdir ($genome_folder) or die "Can't move to $genome_folder: $!";
+  chdir ($genome_folder) or die "Can't move to genome folder $genome_folder: $!";
   print "Now reading in and storing sequence information of the genome specified in: $genome_folder\n\n";
 
   my @chromosome_filenames =  <*.fa>;
@@ -1502,48 +1502,51 @@ sub convert_basespace_to_colorspace{
 
 
 sub process_command_line{
-  my $help;
-  my $length;
-  my $conversion_rate;
-  my $snps;
-  my $error_rate;
-  my $random;
-  my $genome_folder;
-  my $fixed_length_adapter; ### replaces <int> bp at the end of each sequence
-  my $variable_length_adapter;  ### replaces a variable amount of sequence at the end of some sequences
-  my $adapter_dimer;  ### introduces <int> % of adapter dimers into the sequence simulation file
-  my $number_of_seqs;
-  my $quality;
-  my $colorspace;
-  my $non_directional;
-  my $CG_conversion_rate;
-  my $CH_conversion_rate;
-  my $paired_end;
-  my $minfrag;
-  my $maxfrag;
-  my $version;
+	my $help;
+	my $length;
+	my $conversion_rate;
+	my $snps;
+	my $error_rate;
+	my $random;
+	my $genome_folder;
+	my $fixed_length_adapter; ### replaces <int> bp at the end of each sequence
+	my $variable_length_adapter;  ### replaces a variable amount of sequence at the end of some sequences
+	my $adapter_dimer;  ### introduces <int> % of adapter dimers into the sequence simulation file
+	my $number_of_seqs;
+	my $quality;
+	my $colorspace;
+	my $non_directional;
+	my $CG_conversion_rate;
+	my $CH_conversion_rate;
+	my $paired_end;
+	my $minfrag;
+	my $maxfrag;
+	my $version;
+	my $output_dir;
 
-  my $command_line = GetOptions ('help|man' => \$help,
-				 'l|length=i' => \$length,
-				 'cr|conversion_rate=f' => \$conversion_rate,
-				 'variable_length_adapter=i' => \$variable_length_adapter,
-				 'fixed_length_adapter=i' => \$fixed_length_adapter,
-				 'adapter_dimer=i' => \$adapter_dimer,
-				 'e|error_rate=f' => \$error_rate,
-				 'n|number_of_seqs=i' => \$number_of_seqs,
-				 's|snps=i' => \$snps,
-				 'q|quality=i' => \$quality,
-				 'random' => \$random,
-				 'colorspace' => \$colorspace,
-				 'genome_folder=s' => \$genome_folder,
-				 'non_directional' => \$non_directional,
-				 'CG|CG_conversion=f' => \$CG_conversion_rate,
-				 'CH|CH_conversion=f' => \$CH_conversion_rate,
-				 'pe|paired_end' => \$paired_end,
-				 'I|minfrag=i' => \$minfrag,
-				 'X|maxfrag=i' => \$maxfrag,
-				 'version' => \$version,
-				);
+	my $command_line = GetOptions (
+				'help|man'                   => \$help,
+				'l|length=i'                 => \$length,
+				'cr|conversion_rate=f'       => \$conversion_rate,
+				'variable_length_adapter=i'  => \$variable_length_adapter,
+				'fixed_length_adapter=i'     => \$fixed_length_adapter,
+				'adapter_dimer=i'            => \$adapter_dimer,
+				'e|error_rate=f'             => \$error_rate,
+				'n|number_of_seqs=i'         => \$number_of_seqs,
+				's|snps=i'                   => \$snps,
+				'q|quality=i'                => \$quality,
+				'random'                     => \$random,
+				'colorspace'                 => \$colorspace,
+				'genome_folder=s'            => \$genome_folder,
+				'non_directional'            => \$non_directional,
+				'CG|CG_conversion=f'         => \$CG_conversion_rate,
+				'CH|CH_conversion=f'         => \$CH_conversion_rate,
+				'pe|paired_end'              => \$paired_end,
+				'I|minfrag=i'                => \$minfrag,
+				'X|maxfrag=i'                => \$maxfrag,
+				'version'                    => \$version,
+				'output_dir=s'               => \$output_dir,
+ 				);
 
 
   ### EXIT ON ERROR if there were errors with any of the supplied options
@@ -1562,7 +1565,7 @@ sub process_command_line{
 
          Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
-       Sherman version: $sherman_version Copyright 2011-18 Felix Krueger
+       Sherman version: $sherman_version Copyright 2011-19 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
          www.bioinformatics.babraham.ac.uk/projects/sherman/
               https://github.com/FelixKrueger/Sherman
@@ -1592,7 +1595,35 @@ VERSION
     exit;
   }
 
+	 ### OUTPUT DIRECTORY
 
+	chdir $parent_dir or die "Failed to move back to current working directory\n";
+	if ($output_dir){
+		unless ($output_dir =~ /\/$/){
+			$output_dir =~ s/$/\//;
+		}
+
+		if (chdir $output_dir){
+			$output_dir = getcwd; #  making the path absolute
+		}
+		else{
+			mkdir $output_dir or die "Unable to create directory $output_dir $!\n";
+			warn "Created output directory $output_dir!\n\n";
+			chdir $output_dir or die "Failed to move to $output_dir\n";
+			$output_dir = getcwd; #  making the path absolute
+		}
+		
+		unless ($output_dir =~ /\/$/){
+			$output_dir =~ s/$/\//;
+		}
+		warn "Output will be written into the directory: $output_dir\n";
+	}
+	else{
+		$output_dir = '';
+	}
+
+  
+  
   ### BISULFITE CONVERSION RATES
 
   if (defined $CG_conversion_rate or defined $CH_conversion_rate){
@@ -1771,7 +1802,7 @@ VERSION
     $maxfrag = 0;
   }
 
-  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag);
+  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir);
 }
 
 sub print_helpfile{
@@ -1788,6 +1819,10 @@ BASIC ATTRIBUTES:
                                   coordinates are printed into the read-ID line. Accepted formats are FastA files
                                   ending with '.fa' or '.fasta'. Default path: /bi/scratch/Genomes/Mouse/GRCm38/.
                                   Default: ON.
+
+-o/--output_dir <dir>    		  Write all output files into this directory. By default the output files will be written into
+                                  the current directory. If the specified folder does not exist, Sherman will attempt to
+								  create it first. The path to the output folder can be either relative or absolute.								  
 
 --random                          The sequences will be generated with entirely random base composition
                                   instead extracting sequences from a real genome. This is a much
@@ -1861,7 +1896,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 17 January 2019.
+Last update: 18 January 2019.
 
 
 HELP

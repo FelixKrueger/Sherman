@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-19, Felix Krueger (felix.krueger@babraham.ac.uk)
+## This program is Copyright (C) 2011-20, Felix Krueger (felix.krueger@babraham.ac.uk)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -1565,7 +1565,7 @@ sub process_command_line{
 
          Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
-       Sherman version: $sherman_version Copyright 2011-19 Felix Krueger
+       Sherman version: $sherman_version Copyright 2011-20 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
          www.bioinformatics.babraham.ac.uk/projects/sherman/
               https://github.com/FelixKrueger/Sherman
@@ -1792,9 +1792,9 @@ VERSION
     if ($maxfrag <= $minfrag){
       die "Please select sensible fragment lengths (up to a maximum of 2000bp) (currently selected min: $minfrag/ max: $maxfrag)\n\n";
     }
-    if ( ($maxfrag-$minfrag) <= $length){
-      die "Please select a fragment length that is longer than the read length\n\n";
-    }
+    # if ( ($maxfrag-$minfrag) <= $length){
+    #   die "Please select a fragment length that is longer than the read length\n\n";
+    # }
   }
   else{
     $paired_end = 0;

@@ -1190,7 +1190,7 @@ sub generate_genomic_sequences {
 	    $sequence = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
 	    
 	    # if the sequence contains any N's we are generating another random number without any Ns
-	    # last if ($sequence =~ /n/i);
+	    last if ($sequence =~ /n/i);
 	    last if (length($sequence) != $sequence_length);
 	    
 	    # otherwise we randomly choose either a forward or reverse sequence and then return it
@@ -1554,7 +1554,7 @@ sub process_command_line{
 
          Sherman - bisulfite-treated Read FastQ Simulator
 
-       Sherman version: $sherman_version Copyright 2011-16 Felix Krueger
+       Sherman version: $sherman_version Copyright 2011-21 Felix Krueger
       Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
          www.bioinformatics.babraham.ac.uk/projects/sherman/
               https://github.com/FelixKrueger/Sherman
@@ -1572,7 +1572,7 @@ VERSION
       exit;
     }
     if ($length < 0 or $length > 300000){
-      warn "A sequence shorter than 0 bp or longer than 300bp? ... Please respecify!\n";
+      warn "A sequence shorter than 0 bp or longer than 300,000bp? ... Please respecify!\n";
       print_helpfile();
       exit;
     }
@@ -1632,7 +1632,7 @@ VERSION
     }
   }
   else {
-    $number_of_seqs = 1000000;
+      $number_of_seqs = 1000000;
   }
 
   ### ERROR RATE
@@ -1772,7 +1772,8 @@ sub print_helpfile{
 
 BASIC ATTRIBUTES:
 
--l/--length                       The length of all sequences to be generated (between 1 and 300). Has to be specified.
+-l/--length                       The length of all sequences to be generated (between 1 and 300000 (long reads indeeed)).
+                                  Has to be specified.
 
 -n/--number_of_seqs               The number of sequences to be generated. Default: 1000000.
 
@@ -1849,7 +1850,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 31 October 2016.
+Last update: 20 April 2021.
 
 
 HELP

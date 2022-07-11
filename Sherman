@@ -132,9 +132,12 @@ sub run_sequence_generation{
   if ($paired_end){
     open (FASTQ_R1,'>',"${output_dir}simulated_1.fastq") or die $!;
     open (FASTQ_R2,'>',"${output_dir}simulated_2.fastq") or die $!;
+    open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
+
   }
   else{
     open (FASTQ,'>',"${output_dir}simulated.fastq") or die $!;
+    open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
   }
 
   if ($colorspace){
@@ -215,6 +218,17 @@ sub run_sequence_generation{
 		if ($paired_end){
 		    
 		($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
+		
+		my @spl;
+		my @spl_1;
+
+		@spl = split(':', $genomic_coords);
+		@spl_1 = split('-', $spl[1]);
+        
+        my $left_start = $spl_1[0];
+		my $right_start = $spl_1[1];
+
+		
 		if ($strand eq 'plus'){
 			$plus_strand_total++;
 		}
@@ -231,8 +245,8 @@ sub run_sequence_generation{
 		
 		### BISULFITE CONVERSION
 		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-			$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
-			$seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
+			$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $left_start, "left", $spl[0]);
+			$seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $right_start, "right", $spl[0]);
 		}
 		else{
 		if  ($conversion_rate == 0){
@@ -240,8 +254,8 @@ sub run_sequence_generation{
 			$seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
 		}
 		else{
-			$seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
-			$seq_2 = bisulfite_transform_sequences_uniformly($seq_2);
+			$seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
+			$seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $right_start, "right", $spl[0]);
 		}
 	}
 	### NON-DIRECTIONAL LIBRARIES
@@ -265,7 +279,7 @@ sub run_sequence_generation{
       }
 
       ### SINGLE-END
-      else{
+    else{
 	($seq_1,$strand,$genomic_coords) = generate_genomic_sequences ();
 
 	if ($strand eq 'plus'){
@@ -275,6 +289,14 @@ sub run_sequence_generation{
 	  $minus_strand_total++;
 	}
 
+    my @spl;
+    my @spl_1;
+
+    @spl = split(':', $genomic_coords);
+    @spl_1 = split('-', $spl[1]);
+        
+    my $left_start = $spl_1[0];
+
 	### INTRODUCING SNPS
 	### we need to introduce SNPs before bisulfite conversion takes place
 	if ($number_of_SNPs > 0){
@@ -282,14 +304,14 @@ sub run_sequence_generation{
 	}
 	### BISULFITE CONVERSION
 	if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-	  $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1);
+	  $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $left_start, "left", $spl[0]);
 	}
 	else{
 	  if  ($conversion_rate == 0){
 	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
 	  }
 	  else{
-	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
+	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
 	  }
 	}
 	### NON-DIRECTIONAL LIBRARIES
@@ -674,16 +696,19 @@ sub bisulfite_transform_sequences_uniformly{
 
   my $total_C_count = 0;
   my $converted_C_count = 0;
-
+  my $base_counter = 0;
+  
   my $seq = shift;
- 
+  my $start_pos = shift;
+  my $direction = shift;
+  my $chrom = shift;
   ### shortening the sequence again by 1bp
   $seq = substr($seq,0, (length($seq)-1));
-
+  
   my @bases = split (//,$seq);
 
   foreach my $base (@bases){
-
+	$base_counter++;
     # only going to change Cs
     if ($base eq 'C'){
       ++$total_C_count;
@@ -691,8 +716,21 @@ sub bisulfite_transform_sequences_uniformly{
       my $random = int(rand(10000)+1)/100;
 	
       if ($random <= $conversion_rate){
-	++$converted_C_count;
-	$base = 'T';
+	      ++$converted_C_count;
+	      $base = 'T';
+	      
+	      if ($direction eq "left") {
+             print POS_CHANGE "$chrom\t";
+	         print POS_CHANGE $start_pos + $base_counter;
+	         print POS_CHANGE "\n";
+	      } 
+	      
+	      if ($direction eq "right") {
+	         print POS_CHANGE "$chrom\t";
+	         print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+	         print POS_CHANGE "\n";
+	      }
+
       }
     }
   }
@@ -709,16 +747,20 @@ sub bisulfite_transform_sequences_uniformly{
 sub bisulfite_transform_sequences_context_specifically{
 
   my $seq = shift;
-
+  my $start_pos = shift;
+  my $direction = shift;
+  my $chrom = shift;
+  
   my $converted_CG_count = 0;
   my $total_CG_count = 0;
   my $converted_CH_count = 0;
   my $total_CH_count = 0;
-
+  my $base_counter = 0;
+  
   my @bases = split (//,$seq);
 
   foreach my $index (0..$#bases){
-
+	$base_counter++;
     # only going to change Cs
     if ($bases[$index] eq 'C'){
 
@@ -732,7 +774,23 @@ sub bisulfite_transform_sequences_context_specifically{
 
 	if ($random <= $CH_conversion_rate){
 	  $converted_CH_count++;
+	  
 	  $bases[$index] = 'T';
+	  
+      if ($direction eq "left") {
+		print POS_CHANGE "$chrom\t";
+	    print POS_CHANGE $start_pos + $base_counter;
+	    print POS_CHANGE "\tconverted_CH\n";
+	  } 
+	      
+      if ($direction eq "right") {
+		print POS_CHANGE "$chrom\t";
+		print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+		print POS_CHANGE "\tconverted_CH\n";
+	  }
+	  
+	  
+	  
 	}
       }
 
@@ -743,6 +801,21 @@ sub bisulfite_transform_sequences_context_specifically{
 	  if ($random <= $CG_conversion_rate){
 	    $bases[$index] = 'T';
 	    $converted_CG_count++;
+
+		  if ($direction eq "left") {
+			print POS_CHANGE "$chrom\t";
+			print POS_CHANGE $start_pos + $base_counter;
+			print POS_CHANGE "\tconverted_CG\n";
+		  } 
+	  
+		  if ($direction eq "right") {
+
+			print POS_CHANGE "$chrom\t";
+			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+			print POS_CHANGE "\tconverted_CG\n";
+		  }
+  
+	    
 	  }
 	}
 	else {
@@ -751,6 +824,21 @@ sub bisulfite_transform_sequences_context_specifically{
 	  if ($random <= $CH_conversion_rate){
 	    $bases[$index] = 'T';
 	    $converted_CH_count++;
+
+         if ($direction eq "left") {
+			print POS_CHANGE "$chrom\t";
+			print POS_CHANGE $start_pos + $base_counter;
+			print POS_CHANGE "\tconverted_CH\n";
+		  } 
+	  
+		  if ($direction eq "right") {
+			print POS_CHANGE "$chrom\t";
+			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+			print POS_CHANGE "\tconverted_CH\n";
+		  }
+  
+
+	    
 	  }
 	}
       }

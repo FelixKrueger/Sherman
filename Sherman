@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-20, Felix Krueger (felix.krueger@babraham.ac.uk)
+## This program is Copyright (C) 2011-22, Felix Krueger (fkrueger@altoslabs.com)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.8_dev';
+my $sherman_version = '0.1.9dev';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -43,7 +43,8 @@ my %counting =(
 my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
-my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir) = process_command_line();
+my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,
+$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -69,6 +70,10 @@ sub print_onscreen_summary{
   if ($colorspace){
     warn "Sequences will be written out as both base space and color space FastQ files\n";
   }
+  if ($truth_set){
+    warn "Generating additional truth set file ('positional_changes.txt')\n";
+  }  
+
   warn "\n";
 
   warn "Possible sources of contamination:\n";
@@ -132,12 +137,15 @@ sub run_sequence_generation{
   if ($paired_end){
     open (FASTQ_R1,'>',"${output_dir}simulated_1.fastq") or die $!;
     open (FASTQ_R2,'>',"${output_dir}simulated_2.fastq") or die $!;
-    open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
-
+    if ($truth_set){
+      open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
+    }
   }
   else{
     open (FASTQ,'>',"${output_dir}simulated.fastq") or die $!;
-    open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
+    if ($truth_set){
+      open (POS_CHANGE,'>',"${output_dir}positional_changes.txt") or die $!;
+    }
   }
 
   if ($colorspace){
@@ -178,148 +186,147 @@ sub run_sequence_generation{
 
     ### SEQUENCE GENERATION: RANDOM
     if ($random){
-		$seq_1 = generate_random_sequences();
-		if ($paired_end){
-			$seq_2 = generate_random_sequences();
-		}
+      $seq_1 = generate_random_sequences();
+      if ($paired_end){
+        $seq_2 = generate_random_sequences();
+      }
 
-		### INTRODUCING SNPS
-		### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
+      ### INTRODUCING SNPS
+      ### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
 
-		### NON-DIRECTIONAL LIBRARIES
-		### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
+      ### NON-DIRECTIONAL LIBRARIES
+      ### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
 
-		### BISULFITE CONVERSION
-		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-	$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
-	if ($paired_end){	
-	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
-	}
+      ### BISULFITE CONVERSION
+      if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1,"NA");
+        if ($paired_end){	
+          $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2,"NA");
+        }
       }
       else{
-	$seq_1 = bisulfite_transform_sequences_uniformly($seq_1) unless ($conversion_rate == 0);
-	if ($paired_end){
-	  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
-	}
-	
-	if ($conversion_rate == 0){
-	  $seq_1 = substr ($seq_1,0,length ($seq_1) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  if ($paired_end){
-	    $seq_2 = substr ($seq_2,0,length ($seq_2) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  }
-	}
+        $seq_1 = bisulfite_transform_sequences_uniformly($seq_1,"NA") unless ($conversion_rate == 0);
+        if ($paired_end){
+          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2,"NA") unless ($conversion_rate == 0);
+        }
+    
+        if ($conversion_rate == 0){
+          $seq_1 = substr ($seq_1,0,length ($seq_1) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+          if ($paired_end){
+            $seq_2 = substr ($seq_2,0,length ($seq_2) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+          }
+        }
       }
     }
     else{ # SEQUENCE GENRATION: GENOMIC SEQUENCES (default)
 
-		my $strand;
-		### we need to take slightly different routes for single-end and paired-end sequences
-		### PAIRED-END
-		if ($paired_end){
+      my $strand;
+      ### we need to take slightly different routes for single-end and paired-end sequences
+      ### PAIRED-END
+      if ($paired_end){
 		    
-		($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
-		
-		my @spl;
-		my @spl_1;
+	  	  ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
+				my @spl;
+        my @spl_1;
 
-		@spl = split(':', $genomic_coords);
-		@spl_1 = split('-', $spl[1]);
-        
+        @spl = split(':', $genomic_coords);
+        @spl_1 = split('-', $spl[1]);
+          
         my $left_start = $spl_1[0];
-		my $right_start = $spl_1[1];
+        my $right_start = $spl_1[1];
 
+      
+        if ($strand eq 'plus'){
+          $plus_strand_total++;
+        }
+        else{
+          $minus_strand_total++;
+        }
+        # warn "$genomic_coords\n"; sleep(1);
+        ### INTRODUCING SNPS
+        ### we need to introduce SNPs before bisulfite conversion takes place
+        if ($number_of_SNPs > 0){
+          $seq_1 = introduce_SNPs($seq_1);
+          $seq_2 = introduce_SNPs($seq_2);
+        }
 		
-		if ($strand eq 'plus'){
-			$plus_strand_total++;
-		}
-		else{
-			$minus_strand_total++;
-		}
-		# warn "$genomic_coords\n"; sleep(1);
-		### INTRODUCING SNPS
-		### we need to introduce SNPs before bisulfite conversion takes place
-		if ($number_of_SNPs > 0){
-			$seq_1 = introduce_SNPs($seq_1);
-			$seq_2 = introduce_SNPs($seq_2);
-		}
-		
-		### BISULFITE CONVERSION
-		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-			$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $left_start, "left", $spl[0]);
-			$seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $right_start, "right", $spl[0]);
-		}
-		else{
-		if  ($conversion_rate == 0){
-			$seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-			$seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-		}
-		else{
-			$seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
-			$seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $right_start, "right", $spl[0]);
-		}
-	}
-	### NON-DIRECTIONAL LIBRARIES
-	if ($non_directional){
-	  my $complemented = make_non_directional_sequences();
-	
-	  ### We are swapping read 1 and read 2 if we want to get non-directioal reads
-	  if ($complemented == 1){
-	    $seq_2 = reverse_complement($seq_2);# reverse complementing the paired-end side
-	    my $temp = $seq_1;
-	    $seq_1 = $seq_2;
-	    $seq_2 = $temp;
-	  }
-	  else{
-	    $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
-	  }
-	}	
-	else{
-	  $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
-	}
+      ### BISULFITE CONVERSION
+      if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $left_start, "left", $spl[0]);
+        $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $right_start, "right", $spl[0]);
       }
-
-      ### SINGLE-END
-    else{
-	($seq_1,$strand,$genomic_coords) = generate_genomic_sequences ();
-
-	if ($strand eq 'plus'){
-	  $plus_strand_total++;
-	}
-	else{
-	  $minus_strand_total++;
-	}
-
-    my @spl;
-    my @spl_1;
-
-    @spl = split(':', $genomic_coords);
-    @spl_1 = split('-', $spl[1]);
-        
-    my $left_start = $spl_1[0];
-
-	### INTRODUCING SNPS
-	### we need to introduce SNPs before bisulfite conversion takes place
-	if ($number_of_SNPs > 0){
-	  $seq_1 = introduce_SNPs($seq_1);
-	}
-	### BISULFITE CONVERSION
-	if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-	  $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $left_start, "left", $spl[0]);
-	}
-	else{
-	  if  ($conversion_rate == 0){
-	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  }
-	  else{
-	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
-	  }
-	}
-	### NON-DIRECTIONAL LIBRARIES
-	if ($non_directional){
-	  $seq_1 = make_non_directional_sequences($seq_1);
-	}
+	  	else{
+       
+        if  ($conversion_rate == 0){
+          $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+          $seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+        }
+        else{
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
+          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $right_start, "right", $spl[0]);
+        }
+      }
+      ### NON-DIRECTIONAL LIBRARIES
+      if ($non_directional){
+        my $complemented = make_non_directional_sequences();
+      
+        ### We are swapping read 1 and read 2 if we want to get non-directioal reads
+        if ($complemented == 1){
+          $seq_2 = reverse_complement($seq_2);# reverse complementing the paired-end side
+          my $temp = $seq_1;
+          $seq_1 = $seq_2;
+          $seq_2 = $temp;
+        }
+        else{
+          $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
+        }
+      }	
+      else{
+        $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
       }
     }
+    ### SINGLE-END
+    else{
+      ($seq_1,$strand,$genomic_coords) = generate_genomic_sequences ();
+
+      if ($strand eq 'plus'){
+        $plus_strand_total++;
+      }
+      else{
+        $minus_strand_total++;
+      }
+
+      my @spl;
+      my @spl_1;
+
+      @spl = split(':', $genomic_coords);
+      @spl_1 = split('-', $spl[1]);
+          
+      my $left_start = $spl_1[0];
+
+      ### INTRODUCING SNPS
+      ### we need to introduce SNPs before bisulfite conversion takes place
+      if ($number_of_SNPs > 0){
+        $seq_1 = introduce_SNPs($seq_1);
+      }
+      ### BISULFITE CONVERSION
+      if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+        $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $left_start, "left", $spl[0]);
+      }
+      else{
+        if  ($conversion_rate == 0){
+          $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+        }
+        else{
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
+        }
+      }
+      ### NON-DIRECTIONAL LIBRARIES
+      if ($non_directional){
+        $seq_1 = make_non_directional_sequences($seq_1);
+      }
+    }
+  }
 
     ++$count;
 
@@ -347,7 +354,7 @@ sub run_sequence_generation{
     if ($colorspace){
       $seq_1_cs = convert_basespace_to_colorspace($seq_1);
       if ($paired_end){
-	$seq_2_cs = convert_basespace_to_colorspace($seq_2);
+	      $seq_2_cs = convert_basespace_to_colorspace($seq_2);
       }
     }
 
@@ -357,16 +364,16 @@ sub run_sequence_generation{
 
       ### introducing errors into colorspace data is slightly different to basespace data
       if ($colorspace){
-	$seq_1_cs = introduce_sequencing_errors_colorspace($seq_1_cs,$phred33_quality);
-	if ($paired_end){
-	  $seq_2_cs = introduce_sequencing_errors_colorspace($seq_2_cs,$phred33_quality)
-	}
+        $seq_1_cs = introduce_sequencing_errors_colorspace($seq_1_cs,$phred33_quality);
+        if ($paired_end){
+          $seq_2_cs = introduce_sequencing_errors_colorspace($seq_2_cs,$phred33_quality)
+      	}
       }
 
       ### base space errors (default)
       $seq_1 = introduce_sequencing_errors($seq_1,$phred33_quality);
       if ($paired_end){
-	$seq_2 = introduce_sequencing_errors($seq_2,$phred33_quality)
+	      $seq_2 = introduce_sequencing_errors($seq_2,$phred33_quality)
       }
     }
 
@@ -384,10 +391,10 @@ sub run_sequence_generation{
     ### PRINTING OUT SEQUENCES IN COLOR SPACE
     if ($colorspace){
       if ($paired_end){
-	print_sequences_out_colorspace ($seq_1_cs,$phred33_quality,$count,$genomic_coords,$seq_2_cs);
+	      print_sequences_out_colorspace ($seq_1_cs,$phred33_quality,$count,$genomic_coords,$seq_2_cs);
       }
       else{
-	print_sequences_out_colorspace ($seq_1_cs,$phred33_quality,$count,$genomic_coords,undef);
+	      print_sequences_out_colorspace ($seq_1_cs,$phred33_quality,$count,$genomic_coords,undef);
       }
     }
   }
@@ -694,14 +701,28 @@ sub print_sequences_out_colorspace{
 
 sub bisulfite_transform_sequences_uniformly{
 
+  # my @arggs = @_;
+  # print @arggs;
+
   my $total_C_count = 0;
   my $converted_C_count = 0;
   my $base_counter = 0;
   
   my $seq = shift;
   my $start_pos = shift;
-  my $direction = shift;
-  my $chrom = shift;
+  my $direction;
+  my $chrom;
+
+  if ($start_pos eq 'NA'){
+    $direction = 'NA';
+    $chrom = 'NA';
+  }
+  else{
+    $direction = shift;
+    $chrom = shift;
+  }
+  # warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
+
   ### shortening the sequence again by 1bp
   $seq = substr($seq,0, (length($seq)-1));
   
@@ -719,18 +740,19 @@ sub bisulfite_transform_sequences_uniformly{
 	      ++$converted_C_count;
 	      $base = 'T';
 	      
-	      if ($direction eq "left") {
-             print POS_CHANGE "$chrom\t";
-	         print POS_CHANGE $start_pos + $base_counter;
-	         print POS_CHANGE "\n";
-	      } 
-	      
-	      if ($direction eq "right") {
-	         print POS_CHANGE "$chrom\t";
-	         print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-	         print POS_CHANGE "\n";
-	      }
-
+	      if ($truth_set){
+          if ($direction eq "left") {
+            print POS_CHANGE "$chrom\t";
+	          print POS_CHANGE $start_pos + $base_counter;
+            print POS_CHANGE "\n";
+          } 
+          
+          if ($direction eq "right") {
+            print POS_CHANGE "$chrom\t";
+            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+            print POS_CHANGE "\n";
+          }
+        }
       }
     }
   }
@@ -748,9 +770,17 @@ sub bisulfite_transform_sequences_context_specifically{
 
   my $seq = shift;
   my $start_pos = shift;
-  my $direction = shift;
-  my $chrom = shift;
-  
+  my $direction;
+  my $chrom;
+  if ($start_pos eq 'NA'){
+    $direction = 'NA';
+    $chrom = 'NA';
+  }
+  else{
+    $direction = shift;
+    $chrom = shift;
+  }
+
   my $converted_CG_count = 0;
   my $total_CG_count = 0;
   my $converted_CH_count = 0;
@@ -770,24 +800,26 @@ sub bisulfite_transform_sequences_context_specifically{
       ### if the C is at the last position we can't determine the sequence context (without going back to the genomic sequence) and will assume a non-CpG context for simplicity
       if ( ($index+1) >= scalar@bases){
 
-	$total_CH_count++;
+	      $total_CH_count++;
 
-	if ($random <= $CH_conversion_rate){
-	  $converted_CH_count++;
+	      if ($random <= $CH_conversion_rate){
+	        $converted_CH_count++;
 	  
-	  $bases[$index] = 'T';
+	        $bases[$index] = 'T';
 	  
+    if ($truth_set){
       if ($direction eq "left") {
-		print POS_CHANGE "$chrom\t";
-	    print POS_CHANGE $start_pos + $base_counter;
-	    print POS_CHANGE "\tconverted_CH\n";
-	  } 
-	      
+        print POS_CHANGE "$chrom\t";
+        print POS_CHANGE $start_pos + $base_counter;
+        print POS_CHANGE "\tconverted_CH\n";
+      } 
+          
       if ($direction eq "right") {
-		print POS_CHANGE "$chrom\t";
-		print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-		print POS_CHANGE "\tconverted_CH\n";
-	  }
+        print POS_CHANGE "$chrom\t";
+        print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+        print POS_CHANGE "\tconverted_CH\n";
+      }
+    }
 	  
 	  
 	  
@@ -796,27 +828,25 @@ sub bisulfite_transform_sequences_context_specifically{
 
       ### determining sequence context
       else{
-	if ( $bases[$index+1] eq 'G'){
-	  $total_CG_count++;
-	  if ($random <= $CG_conversion_rate){
-	    $bases[$index] = 'T';
-	    $converted_CG_count++;
+	      if ( $bases[$index+1] eq 'G'){
+	        $total_CG_count++;
+          if ($random <= $CG_conversion_rate){
+            $bases[$index] = 'T';
+            $converted_CG_count++;
 
-		  if ($direction eq "left") {
-			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos + $base_counter;
-			print POS_CHANGE "\tconverted_CG\n";
-		  } 
-	  
-		  if ($direction eq "right") {
+            if ($direction eq "left") {
+            print POS_CHANGE "$chrom\t";
+            print POS_CHANGE $start_pos + $base_counter;
+            print POS_CHANGE "\tconverted_CG\n";
+            } 
+          
+            if ($direction eq "right") {
 
-			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-			print POS_CHANGE "\tconverted_CG\n";
-		  }
-  
-	    
-	  }
+            print POS_CHANGE "$chrom\t";
+            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+            print POS_CHANGE "\tconverted_CG\n";
+            }    
+          }
 	}
 	else {
 	  ### non-CpG context
@@ -1611,6 +1641,7 @@ sub process_command_line{
 	my $maxfrag;
 	my $version;
 	my $output_dir;
+  my $truth_set;
 
 	my $command_line = GetOptions (
 				'help|man'                   => \$help,
@@ -1634,6 +1665,7 @@ sub process_command_line{
 				'X|maxfrag=i'                => \$maxfrag,
 				'version'                    => \$version,
 				'output_dir=s'               => \$output_dir,
+        'truth_set'                  => \$truth_set,
  				);
 
 
@@ -1653,10 +1685,11 @@ sub process_command_line{
 
          Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
-       Sherman version: $sherman_version Copyright 2011-20 Felix Krueger
-      Babraham Bioinformatics (felix.krueger\@babraham.ac.uk)
-         www.bioinformatics.babraham.ac.uk/projects/sherman/
-              https://github.com/FelixKrueger/Sherman
+                     Sherman version: $sherman_version
+                 Copyright 2011-22, Felix Krueger
+            Altos Labs, Cambridge (fkrueger\@altoslabs.com)
+         
+                https://github.com/FelixKrueger/Sherman
 
 VERSION
     exit;
@@ -1730,7 +1763,7 @@ VERSION
     unless ($CH_conversion_rate >= 0 and $CH_conversion_rate <= 100){
       die "Please specify a CH-conversion rate between 0 and 100\n";
     }
-    ## setting the uniform conversionr ate to undef
+    ## setting the uniform conversion rate to undef
     $conversion_rate = undef;
   }
 
@@ -1792,10 +1825,26 @@ VERSION
   }
 
   ### RANDOM SEQUENCES INSTEAD OF MOUSE GENOME ONES
-  unless ($random){
+  if ($random){
+    if ($truth_set){
+      die "The option --truth_set is not available for --random mode. Please re-specify.\n";
+    }
+  }
+  else{
     $random = 0;
   }
 
+  if (defined $conversion_rate && $conversion_rate == 0  ){
+    if ($truth_set){
+      warn "Setting --truth_set to FALSE as no conversion will be performed\n";
+    }
+    $truth_set = 0;
+  }
+
+  ### TRUTH SET (optional)g
+  if ($truth_set){
+     warn "Writing a 'truth_set' of positions that underwent bisulfite conversion to the file 'positional_changes.txt' (not available in random mode)\n";
+  }
 
   ### THE BASECALL QUALITY FOR READS WITHOUT ERROR RATE CAN BE SET MANUALLY
 
@@ -1890,7 +1939,8 @@ VERSION
     $maxfrag = 0;
   }
 
-  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir);
+  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,
+  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set);
 }
 
 sub print_helpfile{
@@ -1949,6 +1999,11 @@ BASIC ATTRIBUTES:
 --non_directional                 The reads can orignate from any of the four possible strands produced by
                                   bisulfite conversion and PCR amplification. Default: OFF.
 
+--truth_set                       This option writes out a 'truth set' of positions that underwent bisulfite conversion.
+                                  This is not available in --random mode or when the conversion rate is 0. Default: OFF.
+                                  The output format is (tab-delimited): 
+                                  >> chromosome <<   \t   >> position <<   \t   >> context << 
+
 
 CONTAMINANTS:
 
@@ -1984,7 +2039,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 18 January 2019.
+Last update: 11 July 2022.
 
 
 HELP

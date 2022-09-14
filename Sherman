@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.9';
+my $sherman_version = '0.1.9dev';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -807,23 +807,20 @@ sub bisulfite_transform_sequences_context_specifically{
 	  
 	        $bases[$index] = 'T';
 	  
-    if ($truth_set){
-      if ($direction eq "left") {
-        print POS_CHANGE "$chrom\t";
-        print POS_CHANGE $start_pos + $base_counter;
-        print POS_CHANGE "\tconverted_CH\n";
-      } 
-          
-      if ($direction eq "right") {
-        print POS_CHANGE "$chrom\t";
-        print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-        print POS_CHANGE "\tconverted_CH\n";
-      }
-    }
-	  
-	  
-	  
-	}
+          if ($truth_set){
+            if ($direction eq "left") {
+              print POS_CHANGE "$chrom\t";
+              print POS_CHANGE $start_pos + $base_counter;
+              print POS_CHANGE "\tconverted_CH\n";
+            } 
+                
+            if ($direction eq "right") {
+              print POS_CHANGE "$chrom\t";
+              print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+              print POS_CHANGE "\tconverted_CH\n";
+            }
+          }
+        }
       }
 
       ### determining sequence context
@@ -834,43 +831,43 @@ sub bisulfite_transform_sequences_context_specifically{
             $bases[$index] = 'T';
             $converted_CG_count++;
 
-            if ($direction eq "left") {
-            print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos + $base_counter;
-            print POS_CHANGE "\tconverted_CG\n";
-            } 
-          
-            if ($direction eq "right") {
-
-            print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-            print POS_CHANGE "\tconverted_CG\n";
-            }    
+            if ($truth_set){
+              if ($direction eq "left") {
+                print POS_CHANGE "$chrom\t";
+                print POS_CHANGE $start_pos + $base_counter;
+                print POS_CHANGE "\tconverted_CG\n";
+              } 
+            
+              if ($direction eq "right") {
+                print POS_CHANGE "$chrom\t";
+                print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+                print POS_CHANGE "\tconverted_CG\n";
+              }    
+            }
           }
-	}
-	else {
-	  ### non-CpG context
-	  $total_CH_count++;
-	  if ($random <= $CH_conversion_rate){
-	    $bases[$index] = 'T';
-	    $converted_CH_count++;
+        }
+        else {
+          ### non-CpG context
+          $total_CH_count++;
+          if ($random <= $CH_conversion_rate){
+            $bases[$index] = 'T';
+            $converted_CH_count++;
 
-         if ($direction eq "left") {
-			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos + $base_counter;
-			print POS_CHANGE "\tconverted_CH\n";
-		  } 
-	  
-		  if ($direction eq "right") {
-			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-			print POS_CHANGE "\tconverted_CH\n";
-		  }
-  
-
-	    
-	  }
-	}
+            if ($truth_set){
+              if ($direction eq "left") {
+                print POS_CHANGE "$chrom\t";
+                print POS_CHANGE $start_pos + $base_counter;
+                print POS_CHANGE "\tconverted_CH\n";
+              } 
+            
+              if ($direction eq "right") {
+                print POS_CHANGE "$chrom\t";
+                print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+                print POS_CHANGE "\tconverted_CH\n";
+              }
+            }
+          }
+	      } 
       }
     }
   }

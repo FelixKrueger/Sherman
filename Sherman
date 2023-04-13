@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-22, Felix Krueger (fkrueger@altoslabs.com)
+## This program is Copyright (C) 2011-23, Felix Krueger (fkrueger@altoslabs.com)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.9dev';
+my $sherman_version = '0.1.10dev';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
@@ -44,7 +44,7 @@ my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
 my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,
-$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set) = process_command_line();
+$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -589,12 +589,22 @@ sub print_sequences_out_basespace{
       # sleep(1);
 
 
-      print FASTQ_R1 "\@${count}_${coord}_R1\n";
+      if ($bwa_ending){
+        print FASTQ_R1 "\@${count}_${coord}/1\n";
+      }
+      else{
+        print FASTQ_R1 "\@${count}_${coord}_R1\n";
+      }
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
       print FASTQ_R1 "$qual\n";
 
-      print FASTQ_R2 "\@${count}_${coord}_R2\n";
+      if ($bwa_ending){
+        print FASTQ_R2 "\@${count}_${coord}/2\n";
+      }
+      else{
+        print FASTQ_R2 "\@${count}_${coord}_R2\n";
+      }
       print FASTQ_R2 "$seq_2\n";
       print FASTQ_R2 "+\n";
       print FASTQ_R2 "$qual\n";
@@ -615,12 +625,23 @@ sub print_sequences_out_basespace{
   else{ # random reads
   ### paired-end
     if (defined $seq_2){
+      if ($bwa_ending){
+        print FASTQ_R1 '@',$count,"/1\n";
+      }
+      else{
+        print FASTQ_R1 '@',$count,"_R1\n";
+      }
       print FASTQ_R1 '@',$count,"_R1\n";
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
       print FASTQ_R1 "$qual\n";
 
-      print FASTQ_R2 '@',$count,"_R2\n";
+      if ($bwa_ending){
+        print FASTQ_R2 '@',$count,"/2\n";
+      }
+      else{
+         print FASTQ_R2 '@',$count,"_R2\n";
+      }
       print FASTQ_R2 "$seq_2\n";
       print FASTQ_R2 "+\n";
       print FASTQ_R2 "$qual\n";
@@ -1639,6 +1660,7 @@ sub process_command_line{
 	my $version;
 	my $output_dir;
   my $truth_set;
+  my $bwa_ending; # For paired-end reads, have the read IDs following the scheme of xxxx/1 and xxxx/2 (instead of xxx_R1, and xxx_R2)
 
 	my $command_line = GetOptions (
 				'help|man'                   => \$help,
@@ -1663,6 +1685,7 @@ sub process_command_line{
 				'version'                    => \$version,
 				'output_dir=s'               => \$output_dir,
         'truth_set'                  => \$truth_set,
+        'bwa_ending'                 => \$bwa_ending,
  				);
 
 
@@ -1937,7 +1960,7 @@ VERSION
   }
 
   return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,
-  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set);
+  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending);
 }
 
 sub print_helpfile{
@@ -1999,7 +2022,10 @@ BASIC ATTRIBUTES:
 --truth_set                       This option writes out a 'truth set' of positions that underwent bisulfite conversion.
                                   This is not available in --random mode or when the conversion rate is 0. Default: OFF.
                                   The output format is (tab-delimited): 
-                                  >> chromosome <<   \t   >> position <<   \t   >> context << 
+                                  >> chromosome <<   \t   >> position <<   \t   >> context <<
+
+--bwa_ending                      For paired-end reads, have the read IDs follow the scheme of xxx/1 and xxx/2 (instead
+                                  of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners.
 
 
 CONTAMINANTS:
@@ -2036,7 +2062,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 11 July 2022.
+Last update: 13 April 2023.
 
 
 HELP

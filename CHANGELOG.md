@@ -1,7 +1,9 @@
 ## 11-07-2022: Sherman Version v0.1.9 released
 
-- Added option `--truth_set` to write out a file 'positional_changes.txt' containing chromosome, position and C-context (tab-delimited). More [here](https://github.com/FelixKrueger/Sherman/pull/9). 
+- Added option `--truth_set` to write out a file 'positional_changes.txt' containing chromosome, position and C-context (tab-delimited). More [here](https://github.com/FelixKrueger/Sherman/pull/9)
  
+- Added new option `--bwa_ending` for paired-end reads to have the read IDs follow the scheme of xxx/1 and xxx/2 (instead of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners
+
 ## 16-10-2018: Sherman Version v0.1.8 released
 
 - Fixed the coordinates of extracted paired-end sequences

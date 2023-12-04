@@ -27,6 +27,7 @@ my $total_genome_length = 0; ## we need this later to generate random sequences
 my %chromosomes;
 my %seqs;             # single-end reads or read 1 of paired-end reads
 my %seqs_pairs;       # read 2 of paired-end reads
+my %amplicons;        # storing amplicon loci in --amplicon mode
 
 my %counting =(
 	       non_directional => 0,
@@ -44,12 +45,23 @@ my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
 my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,
-$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending) = process_command_line();
+$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending,$amplicon) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
 
 sub print_onscreen_summary{
+
+  if ($amplicon){
+
+    warn "AMPLICON MODE VIA BEDFILE - experimental at this point. Using the following loci:\n\n##############################\n\n";
+    foreach my $amplicon (sort keys %amplicons){
+      warn "$amplicon\t$amplicons{$amplicon}\n";
+    }
+    warn "\n##############################\n\n";
+    sleep(1);
+  }
+
   warn "\nSelected general parameters:\n";
   warn "-"x100,"\n";
   if ($paired_end){
@@ -225,8 +237,14 @@ sub run_sequence_generation{
       ### PAIRED-END
       if ($paired_end){
 		    
-	  	  ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
-				my @spl;
+        if ($amplicon){
+          ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end_amplicon($conversion_rate);
+        }
+        else{
+          ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
+        }
+
+        my @spl;
         my @spl_1;
 
         @spl = split(':', $genomic_coords);
@@ -1439,6 +1457,79 @@ sub generate_genomic_sequences_paired_end {
     }
 }
 
+sub generate_genomic_sequences_paired_end_amplicon {
+    my $conversion_rate = shift;
+    
+    # warn "Number of different amplicon sequences to pick from: ",scalar keys %amplicons,"\n";
+    # die "Generating amplicon reads is not yet implemented!\n";
+    # Example loci as a bed file: 
+    # 17      43125528        43125879        BRCA1           +
+    # 3       12345454        12345855        TEST            -
+
+    my ($chr,$start,$end,$strand) = (split(":",$amplicons{int(rand(scalar keys %amplicons)+1)}))[0,1,2,3];
+    # warn ("chr: $chr, start: $start, end: $end, strand: $strand\n");
+    my $seq_1;
+    my $seq_2;
+    my $coords;
+    my $plus = 0;
+    my $minus = 0;
+    my $valid = 0;
+    
+    my $read2_start;
+  
+    if ( ($end - 1) < length $chromosomes{$chr}){
+
+      if ($strand eq '+'){
+        
+        # READ1: bed files are 0-based, half-open, so we do not need to down-adjust the start position
+        $read2_start = $end - $sequence_length + 1;
+        
+        $seq_1 = substr ($chromosomes{$chr},$start,$sequence_length);
+        $seq_2 = substr ($chromosomes{$chr},$read2_start,$sequence_length);
+
+        # warn "Using amplicon $chr:$start-$end\n";
+        # warn "Using read1/read2 start positions: $start/$read2_start\n";
+
+        ++$plus; # plus strand alignments are fine like this
+        $coords = "${chr}:".($start).'-'.($end);
+      }
+      ### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
+
+      elsif ($strand eq '-'){
+        my $read1_start = $end - $sequence_length;
+        $seq_2 = substr ($chromosomes{$chr},$start - 1,$sequence_length);
+        $seq_1 = substr ($chromosomes{$chr},$read1_start,$sequence_length);
+        $seq_1 = reverse_complement($seq_1);
+        $seq_2 = reverse_complement($seq_2);
+        ++$minus;
+        $coords = "${chr}:".($start).'-'.($end);
+      }
+
+      # if the sequences contain any N's we are generating another random number
+      if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
+        die "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
+      }
+      if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
+        die "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
+      }
+  
+      # $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
+      # warn "Setting coords to: $coords\n";
+    }
+    else{
+      die "Cannot extract this amplicon sequence: $chr:$start-$end\n";
+    }
+	
+    if($plus == 1){
+      # warn "Returning coords: $coords, strand: +\n";
+      return ($seq_1,$seq_2,'plus',$coords); 
+    }
+    else{
+	    # warn "Returning coords: $coords, strand: -\n";     
+	    return ($seq_1,$seq_2,'minus',$coords);
+    }
+}
+
 
 sub generate_random_sequences {
 
@@ -1661,6 +1752,7 @@ sub process_command_line{
 	my $output_dir;
   my $truth_set;
   my $bwa_ending; # For paired-end reads, have the read IDs following the scheme of xxxx/1 and xxxx/2 (instead of xxx_R1, and xxx_R2)
+  my $amplicon_bed;
 
 	my $command_line = GetOptions (
 				'help|man'                   => \$help,
@@ -1686,6 +1778,7 @@ sub process_command_line{
 				'output_dir=s'               => \$output_dir,
         'truth_set'                  => \$truth_set,
         'bwa_ending'                 => \$bwa_ending,
+        'amplicon_bedfile=s'         => \$amplicon_bed,
  				);
 
 
@@ -1706,7 +1799,7 @@ sub process_command_line{
          Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
                      Sherman version: $sherman_version
-                 Copyright 2011-22, Felix Krueger
+                 Copyright 2011-23, Felix Krueger
             Altos Labs, Cambridge (fkrueger\@altoslabs.com)
          
                 https://github.com/FelixKrueger/Sherman
@@ -1959,8 +2052,76 @@ VERSION
     $maxfrag = 0;
   }
 
+  ### AMPLICON SIMULATION VIA BEDFILE
+  if (defined $amplicon_bed){
+
+    # Only generating paired-end simulations, the user can always choose to ignore R2
+    unless ($paired_end){
+      die "Amplicon simulation is only available for paired-end simulations\n";
+    }
+
+    # Test if the bedfile exists
+     unless (-f $amplicon_bed){
+      die "The specified amplicon bedfile $amplicon_bed does not exist!\n";
+    }
+    
+  
+    open (BED,$amplicon_bed) or die "Failed to open amplicon bedfile $amplicon_bed $!\n";
+    
+    # storing the amplicon coordinates in a hash
+    my $amplicon_count = 0;
+    foreach my $line (<BED>){
+
+      chomp $line;
+      ++$amplicon_count;
+      
+      my @lines = split (/\t/,$line);
+      # Test if the bedfile is in the correct format
+      if (scalar@lines < 3){
+          die "The amplicon bedfile $amplicon_bed does not seem to be in the correct format (4 columns)\n";
+      }
+      
+      my $chr = $lines[0];
+      my $start = $lines[1];
+      my $end = $lines[2];
+      my $amplicon_name;
+      my $strand;
+      if (scalar@lines >= 4){
+        $amplicon_name = $lines[3];
+      }
+      else{
+        $amplicon_name = $amplicon_count;
+      }
+
+      if (scalar@lines >= 6){
+        $strand = $lines[5];
+      }
+      else{
+        $strand = '+';
+      }
+    
+      if ($strand ne '+' and $strand ne '-'){
+        die "The amplicon strand $strand does not seem to be in the correct format (+  or -), please adjsut the format accordingly\n";
+      }
+      else{
+
+        if (exists $amplicons{$amplicon_count}){
+          die "The amplicon name $amplicon_count is not unique in the amplicon bedfile $amplicon_bed\n";
+        }
+        else{
+          $amplicons{$amplicon_count} = "$chr:$start:$end:$strand";
+        }
+      }
+    }
+
+    close BED;
+  }
+  else{
+    $amplicon_bed = undef;
+  }
+
   return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,
-  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending);
+  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending,$amplicon_bed);
 }
 
 sub print_helpfile{
@@ -2027,6 +2188,14 @@ BASIC ATTRIBUTES:
 --bwa_ending                      For paired-end reads, have the read IDs follow the scheme of xxx/1 and xxx/2 (instead
                                   of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners.
 
+--amplicon_bedfile <file.bed>     Simulate reads from the amplicons specified in the bedfile. The bedfile needs to be
+                                  in the following format (tab-delimited):
+                                  >> chromosome <<  >> start <<  >> end <<  >> name <<  >> score <<  >> strand <<
+                                  The strand can be either + or -. If the strand is not specified, the amplicon will be
+                                  simulated on the + strand. If the name is not specified, the amplicon will be named
+                                  after its line number in the bedfile. The score field is not getting used.
+                                  The amplicon simulation is only available for paired-end reads.
+
 
 CONTAMINANTS:
 
@@ -2062,7 +2231,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 13 April 2023.
+Last update: 04 December 2023.
 
 
 HELP

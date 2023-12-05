@@ -1463,8 +1463,8 @@ sub generate_genomic_sequences_paired_end_amplicon {
     # warn "Number of different amplicon sequences to pick from: ",scalar keys %amplicons,"\n";
     # die "Generating amplicon reads is not yet implemented!\n";
     # Example loci as a bed file: 
-    # 17      43125528        43125879        BRCA1           +
-    # 3       12345454        12345855        TEST            -
+    # 17      43125528        43125879        +
+    # 3       12345454        12345855        -
 
     my ($chr,$start,$end,$strand) = (split(":",$amplicons{int(rand(scalar keys %amplicons)+1)}))[0,1,2,3];
     # warn ("chr: $chr, start: $start, end: $end, strand: $strand\n");
@@ -2077,40 +2077,20 @@ VERSION
       
       my @lines = split (/\t/,$line);
       # Test if the bedfile is in the correct format
-      if (scalar@lines < 3){
-          die "The amplicon bedfile $amplicon_bed does not seem to be in the correct format (4 columns)\n";
+      if (scalar@lines != 4){
+          die "The amplicon bedfile $amplicon_bed does not seem to be in the correct format (4 columns required)\n";
       }
       
       my $chr = $lines[0];
       my $start = $lines[1];
       my $end = $lines[2];
-      my $amplicon_name;
-      my $strand;
-      if (scalar@lines >= 4){
-        $amplicon_name = $lines[3];
-      }
-      else{
-        $amplicon_name = $amplicon_count;
-      }
+      my $strand = $lines[3];
 
-      if (scalar@lines >= 6){
-        $strand = $lines[5];
-      }
-      else{
-        $strand = '+';
-      }
-    
       if ($strand ne '+' and $strand ne '-'){
-        die "The amplicon strand $strand does not seem to be in the correct format (+  or -), please adjsut the format accordingly\n";
+        die "The amplicon strand $strand does not seem to be in the correct format (+  or -), please adjust the format accordingly\n";
       }
       else{
-
-        if (exists $amplicons{$amplicon_count}){
-          die "The amplicon name $amplicon_count is not unique in the amplicon bedfile $amplicon_bed\n";
-        }
-        else{
-          $amplicons{$amplicon_count} = "$chr:$start:$end:$strand";
-        }
+        $amplicons{$amplicon_count} = "$chr:$start:$end:$strand";
       }
     }
 
@@ -2188,13 +2168,10 @@ BASIC ATTRIBUTES:
 --bwa_ending                      For paired-end reads, have the read IDs follow the scheme of xxx/1 and xxx/2 (instead
                                   of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners.
 
---amplicon_bedfile <file.bed>     Simulate reads from the amplicons specified in the bedfile. The bedfile needs to be
-                                  in the following format (tab-delimited):
-                                  >> chromosome <<  >> start <<  >> end <<  >> name <<  >> score <<  >> strand <<
-                                  The strand can be either + or -. If the strand is not specified, the amplicon will be
-                                  simulated on the + strand. If the name is not specified, the amplicon will be named
-                                  after its line number in the bedfile. The score field is not getting used.
-                                  The amplicon simulation is only available for paired-end reads.
+--amplicon_bedfile <file.bed>     Simulate reads from the amplicons specified in the bed-style file which needs to
+                                  have 4 columns and be in the following format (tab-delimited):
+                                  >> chromosome <<  >> start <<  >> end <<  >> strand <<
+                                  The strand can be either + or -. '--amplicon' is only available for paired-end reads.
 
 
 CONTAMINANTS:
@@ -2231,7 +2208,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 04 December 2023.
+Last update: 05 December 2023.
 
 
 HELP

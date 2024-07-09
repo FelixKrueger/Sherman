@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-23, Felix Krueger (fkrueger@altoslabs.com)
+## This program is Copyright (C) 2011-24, Felix Krueger (fkrueger@altoslabs.com)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -253,7 +253,15 @@ sub run_sequence_generation{
         my $left_start = $spl_1[0];
         my $right_start = $spl_1[1];
 
-      
+        # if ($left_start eq "" or $right_start eq ""){
+        #   warn "genomic coords: $genomic_coords\n";
+        #   warn "Ned to get to the bottom of this\n";
+        #   warn "contents of \@spl: @spl\n";
+        #   warn "contents of \@spl_1: @spl_1\n";
+        #   warn "left start: >>>$left_start<<<\n";
+        #   warn "right start: >>>$right_start<<<\n"; 
+        # }  
+
         if ($strand eq 'plus'){
           $plus_strand_total++;
         }
@@ -741,7 +749,7 @@ sub print_sequences_out_colorspace{
 sub bisulfite_transform_sequences_uniformly{
 
   # my @arggs = @_;
-  # print @arggs;
+  # print @args;
 
   my $total_C_count = 0;
   my $converted_C_count = 0;
@@ -752,6 +760,10 @@ sub bisulfite_transform_sequences_uniformly{
   my $direction;
   my $chrom;
 
+  if ($start_pos eq ""){
+    warn "No start position defined for bisulfite conversion: >>>$start_pos<<<\n";
+  }
+
   if ($start_pos eq 'NA'){
     $direction = 'NA';
     $chrom = 'NA';
@@ -759,6 +771,10 @@ sub bisulfite_transform_sequences_uniformly{
   else{
     $direction = shift;
     $chrom = shift;
+  }
+   if ($start_pos eq ""){
+    warn "No start position defined for bisulfite conversion: >>>$start_pos<<<\n";
+    warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
   }
   # warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
 
@@ -781,6 +797,13 @@ sub bisulfite_transform_sequences_uniformly{
 	      
 	      if ($truth_set){
           if ($direction eq "left") {
+            if ($start_pos eq ""){
+              die "No start position defined for bisulfite conversion\n";
+            
+            }
+            if ($base_counter eq ""){
+              die "No base counter defined for bisulfite conversion\n";
+            }
             print POS_CHANGE "$chrom\t";
 	          print POS_CHANGE $start_pos + $base_counter;
             print POS_CHANGE "\n";
@@ -1386,15 +1409,15 @@ sub generate_genomic_sequences_paired_end {
     my $plus = 0;
     my $minus = 0;
     my $valid = 0;
-	# warn "fragment_length: $fragment_length\n";
     
     until ($valid){
+	    # warn "Total genome length: $total_genome_length\n";
+
 		my $random = int(rand($total_genome_length)+1);
 		# warn "\n\nNEW FRAGMENT:\nrandom: $random\n";
 		# warn "fragment_length: $fragment_length\n";
     
 		my $chromosome_length = 0;
-		
 		foreach my $chr (sort keys %chromosomes){
 			$chromosome_length += length ($chromosomes{$chr});
 			# warn "total chr length: $chromosome_length\n";
@@ -1419,6 +1442,16 @@ sub generate_genomic_sequences_paired_end {
 					# warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
 					last;
 				}
+        
+        ### In rare cases, the random number is so close to the end of a chromsome or scaffold, that $random + $fragment_length
+        ### is beyond the end of the current chromosome. This will result in a negative offset for the next chromosome/scaffold, which is not allowed.
+        if ($offset =~ /^-/){
+          # warn "Offsetis negative!!!: $offset\n";
+          # warn "fragment_length: $fragment_length\n";
+          # warn "random: $random\n";   
+          # warn "chromosome_length ($chr): $chromosome_length\n";
+          last;
+        }
 			
 				# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
 				my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
@@ -1436,6 +1469,13 @@ sub generate_genomic_sequences_paired_end {
 					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 1);
 				}
 
+        if ($offset =~ /^-/){
+          warn "Offsetis negative!!!: $offset\n";
+          warn "fragment_length: $fragment_length\n";
+          warn "random: $random\n";   
+          warn "chromosome_length ($chr): $chromosome_length\n";
+        }
+
 				# $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
 				# warn "found one! Setting coords to $coords\n";
 				++$valid;
@@ -1447,6 +1487,8 @@ sub generate_genomic_sequences_paired_end {
 			# warn "Proceed to next chr\n\n";
 		}
     }
+
+  
     if($plus == 1){
 	# warn "Returning coords: $coords, strand: +\n";
 	return ($seq_1,$seq_2,'plus',$coords); 
@@ -2208,7 +2250,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 05 December 2023.
+Last update: 09 July 2024.
 
 
 HELP

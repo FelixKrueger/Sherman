@@ -2,7 +2,9 @@
 
 - Added new option `--bwa_ending` for paired-end reads to have the read IDs follow the scheme of xxx/1 and xxx/2 (instead of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners
 
-- Added option `--amplicon_bedfile` to only simulate reads from the start and end of amplicons supplied as bedfile. Works for paired-end only (ignore R2 at your leisure).
+- Added option `--amplicon_bedfile` to only simulate reads from the start and end of amplicons supplied as bedfile. Works for paired-end only (ignore R2 at your leisure)
+
+- Fixed a bug where the offset of paired-end reads became negative (this would occasionally happen when the random position + fragment length exceeded the end of a chromosome/scaffold, and would then result in a negative offset for the next chromosome/scaffold
 
 
 ## 11-07-2022: Sherman Version v0.1.9 released

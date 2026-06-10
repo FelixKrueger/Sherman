@@ -834,6 +834,7 @@ sub bisulfite_transform_sequences_context_specifically{
             $bases[$index] = 'T';
             $converted_CG_count++;
 
+            if ($truth_set){
             if ($direction eq "left") {
             print POS_CHANGE "$chrom\t";
             print POS_CHANGE $start_pos + $base_counter;
@@ -846,6 +847,7 @@ sub bisulfite_transform_sequences_context_specifically{
             print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
             print POS_CHANGE "\tconverted_CG\n";
             }    
+            }
           }
 	}
 	else {
@@ -855,6 +857,7 @@ sub bisulfite_transform_sequences_context_specifically{
 	    $bases[$index] = 'T';
 	    $converted_CH_count++;
 
+            if ($truth_set){
          if ($direction eq "left") {
 			print POS_CHANGE "$chrom\t";
 			print POS_CHANGE $start_pos + $base_counter;
@@ -866,6 +869,7 @@ sub bisulfite_transform_sequences_context_specifically{
 			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
 			print POS_CHANGE "\tconverted_CH\n";
 		  }
+            }
   
 
 	    

@@ -1368,6 +1368,7 @@ sub generate_genomic_sequences_paired_end {
 				last unless ($chromosome_length - $fragment_length > $random );
 
 				my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
+				last if ($offset < 0); # fragment straddles the previous contig boundary; redraw a new position
 				# warn "Offset: $offset\n";
 				$seq_1 = substr ($chromosomes{$chr},$offset,$sequence_length);
 				$seq_2 = substr ($chromosomes{$chr},$offset + $fragment_length - $sequence_length,$sequence_length);

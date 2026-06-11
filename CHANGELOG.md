@@ -1,3 +1,7 @@
+## Unreleased
+
+- Added option `--amplicon_bedfile <file>` (paired-end only): instead of random fragments, simulate reads for fixed amplicon loci from a 4-column, 0-based half-open BED (chromosome, start, end, strand). Read 1 starts at each amplicon start and read 2 ends at each amplicon end, sampled equally across all amplicons. Truth-set coordinates are computed correctly for both strands. Resolves [#13](https://github.com/FelixKrueger/Sherman/issues/13).
+
 ## 11-07-2022: Sherman Version v0.1.9 released
 
 - Added option `--truth_set` to write out a file 'positional_changes.txt' containing chromosome, position and C-context (tab-delimited). More [here](https://github.com/FelixKrueger/Sherman/pull/9). 

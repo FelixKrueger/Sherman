@@ -15,7 +15,48 @@ Sherman can simulate ungapped high-throughput datasets for bisulfite sequencing 
 - Introduce a variable number of random SNPs into each read
 - Introduce a fixed amount of adapter sequence at the 3' end of all sequences
 - Introduce a variable amount of adapter sequence at various positions at the 3' end of reads
-- Write out a truth set of introduced bisulfite conversions ('positional_changes.txt')
+- Write out a truth set of introduced bisulfite conversions ('positional_changes.txt'), with genomic coordinates that are correct for both strands and both mates
+- Simulate **amplicon** libraries from fixed loci supplied as a BED file (`--amplicon_bedfile`)
+- Optionally use BWA-style `/1` and `/2` paired-end read-name suffixes (`--bwa_ending`)
+
+## Quick start
+
+```bash
+# Random single-end reads, 90% bisulfite conversion
+./Sherman --length 50 --number_of_seqs 100000 --conversion_rate 90
+
+# Genomic paired-end reads from a genome folder, with a truth set of converted positions
+./Sherman --genome_folder /path/to/genome --length 100 --number_of_seqs 1000000 \
+          --paired_end --conversion_rate 99 --truth_set
+
+# Context-specific conversion (different rates for CpG and non-CpG cytosines)
+./Sherman --genome_folder /path/to/genome -l 100 -n 1000000 --paired_end -CG 80 -CH 2
+
+# Amplicon mode: simulate reads for fixed loci listed in a 4-column BED (chr, start, end, strand)
+./Sherman --genome_folder /path/to/genome -l 100 -n 100000 --paired_end \
+          --amplicon_bedfile amplicons.bed --conversion_rate 95 --truth_set
+```
+
+The genome folder should contain one or more FastA files (`.fa`/`.fasta`). Output is written as
+`simulated.fastq` (single-end) or `simulated_1.fastq` / `simulated_2.fastq` (paired-end).
+
+## Notable options
+
+| Option | Description |
+| --- | --- |
+| `-l/--length <int>` | Read length |
+| `-n/--number_of_seqs <int>` | Number of reads (or read pairs) to generate |
+| `--genome_folder <path>` | Extract reads from a real genome instead of random sequence |
+| `--paired_end` | Generate paired-end data (`simulated_1/2.fastq`) |
+| `-cr/--conversion_rate <0-100>` | Uniform bisulfite conversion rate for all cytosines |
+| `-CG / -CH <0-100>` | Context-specific conversion rates (CpG vs non-CpG); used together |
+| `--non_directional` | Reads can originate from any of the four bisulfite strands |
+| `--truth_set` | Write `positional_changes.txt` (chromosome, position, context) of every converted cytosine |
+| `--amplicon_bedfile <file>` | Amplicon mode (paired-end): simulate reads for fixed loci from a 4-column, 0-based half-open BED |
+| `--bwa_ending` | Use `xxx/1` and `xxx/2` paired-end read names (instead of `xxx_R1` / `xxx_R2`) for BWA-based aligners |
+
+Run `./Sherman --help` for the full list of options. For more detailed information please refer to the
+[Sherman User Manual](Sherman_User_Manual.md).
 
 ## Sherman_Nanopore
 

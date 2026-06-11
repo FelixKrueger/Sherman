@@ -225,7 +225,8 @@ sub run_sequence_generation{
       ### PAIRED-END
       if ($paired_end){
 		    
-	  	  ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
+	  	  my ($g0_1,$step_1,$g0_2,$step_2);
+	  	  ($seq_1,$seq_2,$strand,$genomic_coords,$g0_1,$step_1,$g0_2,$step_2) = generate_genomic_sequences_paired_end($conversion_rate);
 				my @spl;
         my @spl_1;
 
@@ -252,8 +253,8 @@ sub run_sequence_generation{
 		
       ### BISULFITE CONVERSION
       if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $left_start, "left", $spl[0]);
-        $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $right_start, "right", $spl[0]);
+        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $g0_1, $step_1, $spl[0]);
+        $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $g0_2, $step_2, $spl[0]);
       }
 	  	else{
        
@@ -262,8 +263,8 @@ sub run_sequence_generation{
           $seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
         }
         else{
-          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
-          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $right_start, "right", $spl[0]);
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $g0_1, $step_1, $spl[0]);
+          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $g0_2, $step_2, $spl[0]);
         }
       }
       ### NON-DIRECTIONAL LIBRARIES
@@ -287,7 +288,8 @@ sub run_sequence_generation{
     }
     ### SINGLE-END
     else{
-      ($seq_1,$strand,$genomic_coords) = generate_genomic_sequences ();
+      my ($g0,$step);
+      ($seq_1,$strand,$genomic_coords,$g0,$step) = generate_genomic_sequences ();
 
       if ($strand eq 'plus'){
         $plus_strand_total++;
@@ -311,14 +313,14 @@ sub run_sequence_generation{
       }
       ### BISULFITE CONVERSION
       if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-        $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $left_start, "left", $spl[0]);
+        $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $g0, $step, $spl[0]);
       }
       else{
         if  ($conversion_rate == 0){
           $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
         }
         else{
-          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $g0, $step, $spl[0]);
         }
       }
       ### NON-DIRECTIONAL LIBRARIES
@@ -709,19 +711,18 @@ sub bisulfite_transform_sequences_uniformly{
   my $base_counter = 0;
   
   my $seq = shift;
-  my $start_pos = shift;
-  my $direction;
-  my $chrom;
+  my $g0 = shift;        # genomic coord of the working sequence's 5' base ('NA' for random/non-genomic reads)
+  my ($step, $chrom);    # $step: +1 forward / -1 reverse-complement
 
-  if ($start_pos eq 'NA'){
-    $direction = 'NA';
+  if ($g0 eq 'NA'){
+    $step = 'NA';
     $chrom = 'NA';
   }
   else{
-    $direction = shift;
+    $step = shift;
     $chrom = shift;
   }
-  # warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
+  # warn "> $seq< \n> $g0 <\n> $step <\n >$chrom <";
 
   ### shortening the sequence again by 1bp
   $seq = substr($seq,0, (length($seq)-1));
@@ -740,18 +741,10 @@ sub bisulfite_transform_sequences_uniformly{
 	      ++$converted_C_count;
 	      $base = 'T';
 	      
-	      if ($truth_set){
-          if ($direction eq "left") {
+	      if ($truth_set and $g0 ne 'NA'){
             print POS_CHANGE "$chrom\t";
-	          print POS_CHANGE $start_pos + $base_counter;
+            print POS_CHANGE $g0 + $step * ($base_counter - 1);
             print POS_CHANGE "\n";
-          } 
-          
-          if ($direction eq "right") {
-            print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-            print POS_CHANGE "\n";
-          }
         }
       }
     }
@@ -769,15 +762,14 @@ sub bisulfite_transform_sequences_uniformly{
 sub bisulfite_transform_sequences_context_specifically{
 
   my $seq = shift;
-  my $start_pos = shift;
-  my $direction;
-  my $chrom;
-  if ($start_pos eq 'NA'){
-    $direction = 'NA';
+  my $g0 = shift;        # genomic coord of the working sequence's 5' base ('NA' for random/non-genomic reads)
+  my ($step, $chrom);    # $step: +1 forward / -1 reverse-complement
+  if ($g0 eq 'NA'){
+    $step = 'NA';
     $chrom = 'NA';
   }
   else{
-    $direction = shift;
+    $step = shift;
     $chrom = shift;
   }
 
@@ -807,18 +799,10 @@ sub bisulfite_transform_sequences_context_specifically{
 	  
 	        $bases[$index] = 'T';
 	  
-    if ($truth_set){
-      if ($direction eq "left") {
+    if ($truth_set and $g0 ne 'NA'){
         print POS_CHANGE "$chrom\t";
-        print POS_CHANGE $start_pos + $base_counter;
+        print POS_CHANGE $g0 + $step * ($base_counter - 1);
         print POS_CHANGE "\tconverted_CH\n";
-      } 
-          
-      if ($direction eq "right") {
-        print POS_CHANGE "$chrom\t";
-        print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-        print POS_CHANGE "\tconverted_CH\n";
-      }
     }
 	  
 	  
@@ -834,18 +818,11 @@ sub bisulfite_transform_sequences_context_specifically{
             $bases[$index] = 'T';
             $converted_CG_count++;
 
-            if ($direction eq "left") {
+            if ($truth_set and $g0 ne 'NA') {
             print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos + $base_counter;
+            print POS_CHANGE $g0 + $step * ($base_counter - 1);
             print POS_CHANGE "\tconverted_CG\n";
-            } 
-          
-            if ($direction eq "right") {
-
-            print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-            print POS_CHANGE "\tconverted_CG\n";
-            }    
+            }
           }
 	}
 	else {
@@ -855,15 +832,9 @@ sub bisulfite_transform_sequences_context_specifically{
 	    $bases[$index] = 'T';
 	    $converted_CH_count++;
 
-         if ($direction eq "left") {
+         if ($truth_set and $g0 ne 'NA') {
 			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos + $base_counter;
-			print POS_CHANGE "\tconverted_CH\n";
-		  } 
-	  
-		  if ($direction eq "right") {
-			print POS_CHANGE "$chrom\t";
-			print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
+			print POS_CHANGE $g0 + $step * ($base_counter - 1);
 			print POS_CHANGE "\tconverted_CH\n";
 		  }
   
@@ -1288,6 +1259,7 @@ sub generate_genomic_sequences {
 
   my $sequence;
   my $coords;
+  my ($g0,$step); # truth_set: genomic coord of the read's 5' base + direction of travel (+1 fwd / -1 revcomp)
   my $plus = 0;
   my $minus = 0;
   my $valid =0;
@@ -1314,9 +1286,13 @@ sub generate_genomic_sequences {
 	    if ($strand == 0){
 		$sequence = reverse_complement($sequence);
 		++$minus;
-	    }	
+		### truth_set: read is revcomp of the window; 5' base maps to the window's 3' end, travelling backwards
+		$g0 = ($chromosome_length - $random) + $sequence_length;  $step = -1;
+	    }
 	    else{
 		++$plus;
+		### truth_set: read is the forward top-strand window
+		$g0 = ($chromosome_length - $random) + 1;  $step = 1;
 	    }
 	    
 	    ++$valid;
@@ -1332,10 +1308,10 @@ sub generate_genomic_sequences {
     }
   }
   if($plus == 1){
-    return ($sequence,'plus',$coords);
+    return ($sequence,'plus',$coords,$g0,$step);
   }
   else{
-    return ($sequence,'minus',$coords);
+    return ($sequence,'minus',$coords,$g0,$step);
   }
 }
 
@@ -1347,6 +1323,7 @@ sub generate_genomic_sequences_paired_end {
     my $seq_1;
     my $seq_2;
     my $coords;
+    my ($g0_1,$step_1,$g0_2,$step_2); # truth_set: genomic coord of each read's 5' base + direction of travel (+1 fwd / -1 revcomp)
     my $plus = 0;
     my $minus = 0;
     my $valid = 0;
@@ -1393,12 +1370,18 @@ sub generate_genomic_sequences_paired_end {
 					$seq_1 = reverse_complement($seq_2);
 					$seq_2 = $temp;
 					++$minus;
-					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);       
-				      
+					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);
+					### truth_set: seq_1 = revcomp of the right window, seq_2 = revcomp of the left window;
+					### each read's 5' base maps to the 3' end of its genomic window, travelling backwards
+					$g0_1 = $offset + $fragment_length;  $step_1 = -1;
+					$g0_2 = $offset + $sequence_length;  $step_2 = -1;
 				}
 				else{
 					++$plus; # plus strand alignments are fine like this
 					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 1);
+					### truth_set: both reads are forward top-strand windows
+					$g0_1 = $offset + 1;                                $step_1 = 1;
+					$g0_2 = $offset + $fragment_length - $sequence_length + 1;  $step_2 = 1;
 				}
 
 				# $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
@@ -1414,11 +1397,11 @@ sub generate_genomic_sequences_paired_end {
     }
     if($plus == 1){
 	# warn "Returning coords: $coords, strand: +\n";
-	return ($seq_1,$seq_2,'plus',$coords); 
+	return ($seq_1,$seq_2,'plus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
     else{
-	# warn "Returning coords: $coords, strand: -\n";     
-	return ($seq_1,$seq_2,'minus',$coords);
+	# warn "Returning coords: $coords, strand: -\n";
+	return ($seq_1,$seq_2,'minus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
 }
 

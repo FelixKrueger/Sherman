@@ -45,7 +45,7 @@ my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
 my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,
-$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon) = process_command_line();
+$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon,$bwa_ending) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -607,12 +607,22 @@ sub print_sequences_out_basespace{
       # sleep(1);
 
 
-      print FASTQ_R1 "\@${count}_${coord}_R1\n";
+      if ($bwa_ending){
+        print FASTQ_R1 "\@${count}_${coord}/1\n";
+      }
+      else{
+        print FASTQ_R1 "\@${count}_${coord}_R1\n";
+      }
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
       print FASTQ_R1 "$qual\n";
 
-      print FASTQ_R2 "\@${count}_${coord}_R2\n";
+      if ($bwa_ending){
+        print FASTQ_R2 "\@${count}_${coord}/2\n";
+      }
+      else{
+        print FASTQ_R2 "\@${count}_${coord}_R2\n";
+      }
       print FASTQ_R2 "$seq_2\n";
       print FASTQ_R2 "+\n";
       print FASTQ_R2 "$qual\n";
@@ -633,12 +643,22 @@ sub print_sequences_out_basespace{
   else{ # random reads
   ### paired-end
     if (defined $seq_2){
-      print FASTQ_R1 '@',$count,"_R1\n";
+      if ($bwa_ending){
+        print FASTQ_R1 '@',$count,"/1\n";
+      }
+      else{
+        print FASTQ_R1 '@',$count,"_R1\n";
+      }
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
       print FASTQ_R1 "$qual\n";
 
-      print FASTQ_R2 '@',$count,"_R2\n";
+      if ($bwa_ending){
+        print FASTQ_R2 '@',$count,"/2\n";
+      }
+      else{
+        print FASTQ_R2 '@',$count,"_R2\n";
+      }
       print FASTQ_R2 "$seq_2\n";
       print FASTQ_R2 "+\n";
       print FASTQ_R2 "$qual\n";
@@ -1714,6 +1734,7 @@ sub process_command_line{
 	my $output_dir;
   my $truth_set;
   my $amplicon_bed;
+  my $bwa_ending; # for paired-end reads, name read IDs xxx/1 and xxx/2 (instead of xxx_R1 / xxx_R2) for BWA-style aligners
 
 	my $command_line = GetOptions (
 				'help|man'                   => \$help,
@@ -1739,6 +1760,7 @@ sub process_command_line{
 				'output_dir=s'               => \$output_dir,
         'truth_set'                  => \$truth_set,
         'amplicon_bedfile=s'         => \$amplicon_bed,
+        'bwa_ending'                 => \$bwa_ending,
  				);
 
 
@@ -2062,7 +2084,7 @@ VERSION
   }
 
   return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,
-  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon_bed);
+  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon_bed,$bwa_ending);
 }
 
 sub print_helpfile{
@@ -2132,6 +2154,10 @@ BASIC ATTRIBUTES:
                                   be tab-delimited with 4 columns: chromosome, start, end, strand (+/-). Coordinates are
                                   0-based and half-open (as is custom for BED). Supply primer-trimmed coordinates if you do
                                   not want the primer regions to receive simulated methylation/conversion.
+
+--bwa_ending                      For paired-end reads, name the read IDs using the BWA-style scheme >> xxx/1 << and
+                                  >> xxx/2 << instead of the default >> xxx_R1 << and >> xxx_R2 <<. This makes the FastQ
+                                  files compatible with BWA-based aligners that expect /1 and /2 mate suffixes. Default: OFF.
 
 
 CONTAMINANTS:

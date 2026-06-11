@@ -5,7 +5,7 @@ use Cwd;
 $|++;
 use Getopt::Long;
 
-## This program is Copyright (C) 2011-24, Felix Krueger (fkrueger@altoslabs.com)
+## This program is Copyright (C) 2011-22, Felix Krueger (fkrueger@altoslabs.com)
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -20,14 +20,14 @@ use Getopt::Long;
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-my $sherman_version = '0.1.10dev';
+my $sherman_version = '0.1.9';
 my $parent_dir = getcwd;
 my $total_genome_length = 0; ## we need this later to generate random sequences
 
 my %chromosomes;
 my %seqs;             # single-end reads or read 1 of paired-end reads
 my %seqs_pairs;       # read 2 of paired-end reads
-my %amplicons;        # storing amplicon loci in --amplicon mode
+my %amplicons;        # amplicon loci (chr:start:end:strand) when --amplicon_bedfile is used
 
 my %counting =(
 	       non_directional => 0,
@@ -45,7 +45,7 @@ my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
 my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,
-$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending,$amplicon) = process_command_line();
+$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon,$bwa_ending) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -53,10 +53,9 @@ run_sequence_generation();
 sub print_onscreen_summary{
 
   if ($amplicon){
-
-    warn "AMPLICON MODE VIA BEDFILE - experimental at this point. Using the following loci:\n\n##############################\n\n";
-    foreach my $amplicon (sort keys %amplicons){
-      warn "$amplicon\t$amplicons{$amplicon}\n";
+    warn "AMPLICON MODE VIA BEDFILE - the start and end reads of all amplicons in the bedfile are simulated equally. Using the following loci:\n\n##############################\n\n";
+    foreach my $amp (sort {$a<=>$b} keys %amplicons){
+      warn "$amp\t$amplicons{$amp}\n";
     }
     warn "\n##############################\n\n";
     sleep(1);
@@ -237,14 +236,14 @@ sub run_sequence_generation{
       ### PAIRED-END
       if ($paired_end){
 		    
-        if ($amplicon){
-          ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end_amplicon($conversion_rate);
-        }
-        else{
-          ($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
-        }
-
-        my @spl;
+	  	  my ($g0_1,$step_1,$g0_2,$step_2);
+	  	  if ($amplicon){
+	  	    ($seq_1,$seq_2,$strand,$genomic_coords,$g0_1,$step_1,$g0_2,$step_2) = generate_genomic_sequences_paired_end_amplicon($conversion_rate);
+	  	  }
+	  	  else{
+	  	    ($seq_1,$seq_2,$strand,$genomic_coords,$g0_1,$step_1,$g0_2,$step_2) = generate_genomic_sequences_paired_end($conversion_rate);
+	  	  }
+				my @spl;
         my @spl_1;
 
         @spl = split(':', $genomic_coords);
@@ -253,15 +252,7 @@ sub run_sequence_generation{
         my $left_start = $spl_1[0];
         my $right_start = $spl_1[1];
 
-        # if ($left_start eq "" or $right_start eq ""){
-        #   warn "genomic coords: $genomic_coords\n";
-        #   warn "Ned to get to the bottom of this\n";
-        #   warn "contents of \@spl: @spl\n";
-        #   warn "contents of \@spl_1: @spl_1\n";
-        #   warn "left start: >>>$left_start<<<\n";
-        #   warn "right start: >>>$right_start<<<\n"; 
-        # }  
-
+      
         if ($strand eq 'plus'){
           $plus_strand_total++;
         }
@@ -278,8 +269,8 @@ sub run_sequence_generation{
 		
       ### BISULFITE CONVERSION
       if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $left_start, "left", $spl[0]);
-        $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $right_start, "right", $spl[0]);
+        $seq_1 = bisulfite_transform_sequences_context_specifically($seq_1, $g0_1, $step_1, $spl[0]);
+        $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2, $g0_2, $step_2, $spl[0]);
       }
 	  	else{
        
@@ -288,8 +279,8 @@ sub run_sequence_generation{
           $seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
         }
         else{
-          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
-          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $right_start, "right", $spl[0]);
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $g0_1, $step_1, $spl[0]);
+          $seq_2 = bisulfite_transform_sequences_uniformly($seq_2, $g0_2, $step_2, $spl[0]);
         }
       }
       ### NON-DIRECTIONAL LIBRARIES
@@ -313,7 +304,8 @@ sub run_sequence_generation{
     }
     ### SINGLE-END
     else{
-      ($seq_1,$strand,$genomic_coords) = generate_genomic_sequences ();
+      my ($g0,$step);
+      ($seq_1,$strand,$genomic_coords,$g0,$step) = generate_genomic_sequences ();
 
       if ($strand eq 'plus'){
         $plus_strand_total++;
@@ -337,14 +329,14 @@ sub run_sequence_generation{
       }
       ### BISULFITE CONVERSION
       if (defined $CG_conversion_rate and defined $CH_conversion_rate){
-        $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $left_start, "left", $spl[0]);
+        $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1, $g0, $step, $spl[0]);
       }
       else{
         if  ($conversion_rate == 0){
           $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
         }
         else{
-          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $left_start, "left", $spl[0]);
+          $seq_1 = bisulfite_transform_sequences_uniformly($seq_1, $g0, $step, $spl[0]);
         }
       }
       ### NON-DIRECTIONAL LIBRARIES
@@ -657,7 +649,6 @@ sub print_sequences_out_basespace{
       else{
         print FASTQ_R1 '@',$count,"_R1\n";
       }
-      print FASTQ_R1 '@',$count,"_R1\n";
       print FASTQ_R1 "$seq_1\n";
       print FASTQ_R1 "+\n";
       print FASTQ_R1 "$qual\n";
@@ -666,7 +657,7 @@ sub print_sequences_out_basespace{
         print FASTQ_R2 '@',$count,"/2\n";
       }
       else{
-         print FASTQ_R2 '@',$count,"_R2\n";
+        print FASTQ_R2 '@',$count,"_R2\n";
       }
       print FASTQ_R2 "$seq_2\n";
       print FASTQ_R2 "+\n";
@@ -749,34 +740,25 @@ sub print_sequences_out_colorspace{
 sub bisulfite_transform_sequences_uniformly{
 
   # my @arggs = @_;
-  # print @args;
+  # print @arggs;
 
   my $total_C_count = 0;
   my $converted_C_count = 0;
   my $base_counter = 0;
   
   my $seq = shift;
-  my $start_pos = shift;
-  my $direction;
-  my $chrom;
+  my $g0 = shift;        # genomic coord of the working sequence's 5' base ('NA' for random/non-genomic reads)
+  my ($step, $chrom);    # $step: +1 forward / -1 reverse-complement
 
-  if ($start_pos eq ""){
-    warn "No start position defined for bisulfite conversion: >>>$start_pos<<<\n";
-  }
-
-  if ($start_pos eq 'NA'){
-    $direction = 'NA';
+  if ($g0 eq 'NA'){
+    $step = 'NA';
     $chrom = 'NA';
   }
   else{
-    $direction = shift;
+    $step = shift;
     $chrom = shift;
   }
-   if ($start_pos eq ""){
-    warn "No start position defined for bisulfite conversion: >>>$start_pos<<<\n";
-    warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
-  }
-  # warn "> $seq< \n> $start_pos <\n> $direction <\n >$chrom <";
+  # warn "> $seq< \n> $g0 <\n> $step <\n >$chrom <";
 
   ### shortening the sequence again by 1bp
   $seq = substr($seq,0, (length($seq)-1));
@@ -795,25 +777,10 @@ sub bisulfite_transform_sequences_uniformly{
 	      ++$converted_C_count;
 	      $base = 'T';
 	      
-	      if ($truth_set){
-          if ($direction eq "left") {
-            if ($start_pos eq ""){
-              die "No start position defined for bisulfite conversion\n";
-            
-            }
-            if ($base_counter eq ""){
-              die "No base counter defined for bisulfite conversion\n";
-            }
+	      if ($truth_set and $g0 ne 'NA'){
             print POS_CHANGE "$chrom\t";
-	          print POS_CHANGE $start_pos + $base_counter;
+            print POS_CHANGE $g0 + $step * ($base_counter - 1);
             print POS_CHANGE "\n";
-          } 
-          
-          if ($direction eq "right") {
-            print POS_CHANGE "$chrom\t";
-            print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-            print POS_CHANGE "\n";
-          }
         }
       }
     }
@@ -831,15 +798,14 @@ sub bisulfite_transform_sequences_uniformly{
 sub bisulfite_transform_sequences_context_specifically{
 
   my $seq = shift;
-  my $start_pos = shift;
-  my $direction;
-  my $chrom;
-  if ($start_pos eq 'NA'){
-    $direction = 'NA';
+  my $g0 = shift;        # genomic coord of the working sequence's 5' base ('NA' for random/non-genomic reads)
+  my ($step, $chrom);    # $step: +1 forward / -1 reverse-complement
+  if ($g0 eq 'NA'){
+    $step = 'NA';
     $chrom = 'NA';
   }
   else{
-    $direction = shift;
+    $step = shift;
     $chrom = shift;
   }
 
@@ -869,20 +835,15 @@ sub bisulfite_transform_sequences_context_specifically{
 	  
 	        $bases[$index] = 'T';
 	  
-          if ($truth_set){
-            if ($direction eq "left") {
-              print POS_CHANGE "$chrom\t";
-              print POS_CHANGE $start_pos + $base_counter;
-              print POS_CHANGE "\tconverted_CH\n";
-            } 
-                
-            if ($direction eq "right") {
-              print POS_CHANGE "$chrom\t";
-              print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-              print POS_CHANGE "\tconverted_CH\n";
-            }
-          }
-        }
+    if ($truth_set and $g0 ne 'NA'){
+        print POS_CHANGE "$chrom\t";
+        print POS_CHANGE $g0 + $step * ($base_counter - 1);
+        print POS_CHANGE "\tconverted_CH\n";
+    }
+	  
+	  
+	  
+	}
       }
 
       ### determining sequence context
@@ -893,43 +854,30 @@ sub bisulfite_transform_sequences_context_specifically{
             $bases[$index] = 'T';
             $converted_CG_count++;
 
-            if ($truth_set){
-              if ($direction eq "left") {
-                print POS_CHANGE "$chrom\t";
-                print POS_CHANGE $start_pos + $base_counter;
-                print POS_CHANGE "\tconverted_CG\n";
-              } 
-            
-              if ($direction eq "right") {
-                print POS_CHANGE "$chrom\t";
-                print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-                print POS_CHANGE "\tconverted_CG\n";
-              }    
+            if ($truth_set and $g0 ne 'NA') {
+            print POS_CHANGE "$chrom\t";
+            print POS_CHANGE $g0 + $step * ($base_counter - 1);
+            print POS_CHANGE "\tconverted_CG\n";
             }
           }
-        }
-        else {
-          ### non-CpG context
-          $total_CH_count++;
-          if ($random <= $CH_conversion_rate){
-            $bases[$index] = 'T';
-            $converted_CH_count++;
+	}
+	else {
+	  ### non-CpG context
+	  $total_CH_count++;
+	  if ($random <= $CH_conversion_rate){
+	    $bases[$index] = 'T';
+	    $converted_CH_count++;
 
-            if ($truth_set){
-              if ($direction eq "left") {
-                print POS_CHANGE "$chrom\t";
-                print POS_CHANGE $start_pos + $base_counter;
-                print POS_CHANGE "\tconverted_CH\n";
-              } 
-            
-              if ($direction eq "right") {
-                print POS_CHANGE "$chrom\t";
-                print POS_CHANGE $start_pos - length($seq) + $base_counter - 1;
-                print POS_CHANGE "\tconverted_CH\n";
-              }
-            }
-          }
-	      } 
+         if ($truth_set and $g0 ne 'NA') {
+			print POS_CHANGE "$chrom\t";
+			print POS_CHANGE $g0 + $step * ($base_counter - 1);
+			print POS_CHANGE "\tconverted_CH\n";
+		  }
+  
+
+	    
+	  }
+	}
       }
     }
   }
@@ -1347,6 +1295,7 @@ sub generate_genomic_sequences {
 
   my $sequence;
   my $coords;
+  my ($g0,$step); # truth_set: genomic coord of the read's 5' base + direction of travel (+1 fwd / -1 revcomp)
   my $plus = 0;
   my $minus = 0;
   my $valid =0;
@@ -1373,9 +1322,13 @@ sub generate_genomic_sequences {
 	    if ($strand == 0){
 		$sequence = reverse_complement($sequence);
 		++$minus;
-	    }	
+		### truth_set: read is revcomp of the window; 5' base maps to the window's 3' end, travelling backwards
+		$g0 = ($chromosome_length - $random) + $sequence_length;  $step = -1;
+	    }
 	    else{
 		++$plus;
+		### truth_set: read is the forward top-strand window
+		$g0 = ($chromosome_length - $random) + 1;  $step = 1;
 	    }
 	    
 	    ++$valid;
@@ -1391,10 +1344,10 @@ sub generate_genomic_sequences {
     }
   }
   if($plus == 1){
-    return ($sequence,'plus',$coords);
+    return ($sequence,'plus',$coords,$g0,$step);
   }
   else{
-    return ($sequence,'minus',$coords);
+    return ($sequence,'minus',$coords,$g0,$step);
   }
 }
 
@@ -1406,18 +1359,19 @@ sub generate_genomic_sequences_paired_end {
     my $seq_1;
     my $seq_2;
     my $coords;
+    my ($g0_1,$step_1,$g0_2,$step_2); # truth_set: genomic coord of each read's 5' base + direction of travel (+1 fwd / -1 revcomp)
     my $plus = 0;
     my $minus = 0;
     my $valid = 0;
+	# warn "fragment_length: $fragment_length\n";
     
     until ($valid){
-	    # warn "Total genome length: $total_genome_length\n";
-
 		my $random = int(rand($total_genome_length)+1);
 		# warn "\n\nNEW FRAGMENT:\nrandom: $random\n";
 		# warn "fragment_length: $fragment_length\n";
     
 		my $chromosome_length = 0;
+		
 		foreach my $chr (sort keys %chromosomes){
 			$chromosome_length += length ($chromosomes{$chr});
 			# warn "total chr length: $chromosome_length\n";
@@ -1427,6 +1381,7 @@ sub generate_genomic_sequences_paired_end {
 				last unless ($chromosome_length - $fragment_length > $random );
 
 				my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
+				last if ($offset < 0); # fragment straddles the previous contig boundary; redraw a new position
 				# warn "Offset: $offset\n";
 				$seq_1 = substr ($chromosomes{$chr},$offset,$sequence_length);
 				$seq_2 = substr ($chromosomes{$chr},$offset + $fragment_length - $sequence_length,$sequence_length);
@@ -1442,16 +1397,6 @@ sub generate_genomic_sequences_paired_end {
 					# warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
 					last;
 				}
-        
-        ### In rare cases, the random number is so close to the end of a chromsome or scaffold, that $random + $fragment_length
-        ### is beyond the end of the current chromosome. This will result in a negative offset for the next chromosome/scaffold, which is not allowed.
-        if ($offset =~ /^-/){
-          # warn "Offsetis negative!!!: $offset\n";
-          # warn "fragment_length: $fragment_length\n";
-          # warn "random: $random\n";   
-          # warn "chromosome_length ($chr): $chromosome_length\n";
-          last;
-        }
 			
 				# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
 				my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
@@ -1461,20 +1406,19 @@ sub generate_genomic_sequences_paired_end {
 					$seq_1 = reverse_complement($seq_2);
 					$seq_2 = $temp;
 					++$minus;
-					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);       
-				      
+					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);
+					### truth_set: seq_1 = revcomp of the right window, seq_2 = revcomp of the left window;
+					### each read's 5' base maps to the 3' end of its genomic window, travelling backwards
+					$g0_1 = $offset + $fragment_length;  $step_1 = -1;
+					$g0_2 = $offset + $sequence_length;  $step_2 = -1;
 				}
 				else{
 					++$plus; # plus strand alignments are fine like this
 					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 1);
+					### truth_set: both reads are forward top-strand windows
+					$g0_1 = $offset + 1;                                $step_1 = 1;
+					$g0_2 = $offset + $fragment_length - $sequence_length + 1;  $step_2 = 1;
 				}
-
-        if ($offset =~ /^-/){
-          warn "Offsetis negative!!!: $offset\n";
-          warn "fragment_length: $fragment_length\n";
-          warn "random: $random\n";   
-          warn "chromosome_length ($chr): $chromosome_length\n";
-        }
 
 				# $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
 				# warn "found one! Setting coords to $coords\n";
@@ -1487,88 +1431,84 @@ sub generate_genomic_sequences_paired_end {
 			# warn "Proceed to next chr\n\n";
 		}
     }
-
-  
     if($plus == 1){
 	# warn "Returning coords: $coords, strand: +\n";
-	return ($seq_1,$seq_2,'plus',$coords); 
+	return ($seq_1,$seq_2,'plus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
     else{
-	# warn "Returning coords: $coords, strand: -\n";     
-	return ($seq_1,$seq_2,'minus',$coords);
+	# warn "Returning coords: $coords, strand: -\n";
+	return ($seq_1,$seq_2,'minus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
 }
 
+
 sub generate_genomic_sequences_paired_end_amplicon {
     my $conversion_rate = shift;
-    
-    # warn "Number of different amplicon sequences to pick from: ",scalar keys %amplicons,"\n";
-    # die "Generating amplicon reads is not yet implemented!\n";
-    # Example loci as a bed file: 
-    # 17      43125528        43125879        +
-    # 3       12345454        12345855        -
 
+    # Pick one amplicon at random (uniform over the loci supplied in the bedfile).
+    # Each value is stored as "chr:start:end:strand"; bed coords are 0-based, half-open.
     my ($chr,$start,$end,$strand) = (split(":",$amplicons{int(rand(scalar keys %amplicons)+1)}))[0,1,2,3];
-    # warn ("chr: $chr, start: $start, end: $end, strand: $strand\n");
+
     my $seq_1;
     my $seq_2;
     my $coords;
+    my ($g0_1,$step_1,$g0_2,$step_2); # truth_set: genomic coord of each read's 5' base + travel direction (+1 fwd / -1 revcomp)
     my $plus = 0;
     my $minus = 0;
-    my $valid = 0;
-    
     my $read2_start;
-  
-    if ( ($end - 1) < length $chromosomes{$chr}){
 
-      if ($strand eq '+'){
-        
-        # READ1: bed files are 0-based, half-open, so we do not need to down-adjust the start position
-        $read2_start = $end - $sequence_length + 1;
-        
-        $seq_1 = substr ($chromosomes{$chr},$start,$sequence_length);
-        $seq_2 = substr ($chromosomes{$chr},$read2_start,$sequence_length);
-
-        # warn "Using amplicon $chr:$start-$end\n";
-        # warn "Using read1/read2 start positions: $start/$read2_start\n";
-
-        ++$plus; # plus strand alignments are fine like this
-        $coords = "${chr}:".($start).'-'.($end);
-      }
-      ### we can only reverse complement seq_2 once the BS-conversion has taken place! (and after SNPs have been introduced)
-
-      elsif ($strand eq '-'){
-        my $read1_start = $end - $sequence_length;
-        $seq_2 = substr ($chromosomes{$chr},$start - 1,$sequence_length);
-        $seq_1 = substr ($chromosomes{$chr},$read1_start,$sequence_length);
-        $seq_1 = reverse_complement($seq_1);
-        $seq_2 = reverse_complement($seq_2);
-        ++$minus;
-        $coords = "${chr}:".($start).'-'.($end);
-      }
-
-      # if the sequences contain any N's we are generating another random number
-      if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
-        die "seq1 ($seq_1) or seq2 ($seq_2) contained N(s)\n";
-      }
-      if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
-        die "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
-      }
-  
-      # $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
-      # warn "Setting coords to: $coords\n";
+    ### Guards (amplicon loci are fixed, so fail loudly rather than silently emit wrong reads)
+    unless (exists $chromosomes{$chr}){
+      die "Amplicon contig '$chr' was not found in the genome\n";
     }
-    else{
-      die "Cannot extract this amplicon sequence: $chr:$start-$end\n";
+    unless ($end <= length $chromosomes{$chr}){
+      die "Cannot extract amplicon $chr:$start-$end: the end lies beyond the contig length (".length($chromosomes{$chr})." bp)\n";
     }
-	
+    if ( ($end - $start) < $sequence_length ){
+      die "Amplicon $chr:$start-$end is shorter than the read length; cannot simulate fixed-endpoint reads\n";
+    }
+
+    if ($strand eq '+'){
+      # READ1 starts at the amplicon start (bed is 0-based, half-open, so no down-adjustment);
+      # READ2 ends at the amplicon end (it is reverse-complemented later, in the caller).
+      $read2_start = $end - $sequence_length + 1;
+      $seq_1 = substr ($chromosomes{$chr},$start,$sequence_length);
+      $seq_2 = substr ($chromosomes{$chr},$read2_start,$sequence_length);
+      ++$plus;
+      $coords = "${chr}:".($start).'-'.($end);
+      $g0_1 = $start + 1;          $step_1 = 1;   # seq_1 forward from genomic start+1
+      $g0_2 = $read2_start + 1;    $step_2 = 1;   # seq_2 forward from genomic read2_start+1
+    }
+    elsif ($strand eq '-'){
+      my $read1_start = $end - $sequence_length;
+      if ($start - 1 < 0 or $read1_start < 0){
+        die "Cannot extract amplicon $chr:$start-$end on the minus strand: a read offset would be negative\n";
+      }
+      $seq_2 = substr ($chromosomes{$chr},$start - 1,$sequence_length);
+      $seq_1 = substr ($chromosomes{$chr},$read1_start,$sequence_length);
+      $seq_1 = reverse_complement($seq_1);
+      $seq_2 = reverse_complement($seq_2);
+      ++$minus;
+      $coords = "${chr}:".($start).'-'.($end);
+      # both reads are reverse complements of their genomic windows: the 5' base maps to the
+      # window's 3' end and walks backwards along the genome.
+      $g0_1 = $end;                          $step_1 = -1;  # seq_1 window genomic (end-L+1 .. end)
+      $g0_2 = ($start - 1) + $sequence_length; $step_2 = -1; # seq_2 window genomic (start .. start+L-1)
+    }
+
+    # amplicon loci are fixed, so an N-containing or wrong-length window is a hard error (not a re-roll)
+    if ($seq_1 =~ /n/i or $seq_2 =~ /n/i){
+      die "Amplicon read seq1 ($seq_1) or seq2 ($seq_2) contained N(s); please choose amplicons in N-free regions\n";
+    }
+    if (length$seq_1 != $sequence_length or length$seq_2 != $sequence_length){
+      die "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
+    }
+
     if($plus == 1){
-      # warn "Returning coords: $coords, strand: +\n";
-      return ($seq_1,$seq_2,'plus',$coords); 
+      return ($seq_1,$seq_2,'plus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
     else{
-	    # warn "Returning coords: $coords, strand: -\n";     
-	    return ($seq_1,$seq_2,'minus',$coords);
+      return ($seq_1,$seq_2,'minus',$coords,$g0_1,$step_1,$g0_2,$step_2);
     }
 }
 
@@ -1793,8 +1733,8 @@ sub process_command_line{
 	my $version;
 	my $output_dir;
   my $truth_set;
-  my $bwa_ending; # For paired-end reads, have the read IDs following the scheme of xxxx/1 and xxxx/2 (instead of xxx_R1, and xxx_R2)
   my $amplicon_bed;
+  my $bwa_ending; # for paired-end reads, name read IDs xxx/1 and xxx/2 (instead of xxx_R1 / xxx_R2) for BWA-style aligners
 
 	my $command_line = GetOptions (
 				'help|man'                   => \$help,
@@ -1819,8 +1759,8 @@ sub process_command_line{
 				'version'                    => \$version,
 				'output_dir=s'               => \$output_dir,
         'truth_set'                  => \$truth_set,
-        'bwa_ending'                 => \$bwa_ending,
         'amplicon_bedfile=s'         => \$amplicon_bed,
+        'bwa_ending'                 => \$bwa_ending,
  				);
 
 
@@ -1841,7 +1781,7 @@ sub process_command_line{
          Sherman - bisulfite-treated FastQ Read Simulator (biQRS)
 
                      Sherman version: $sherman_version
-                 Copyright 2011-23, Felix Krueger
+                 Copyright 2011-22, Felix Krueger
             Altos Labs, Cambridge (fkrueger\@altoslabs.com)
          
                 https://github.com/FelixKrueger/Sherman
@@ -2097,53 +2037,54 @@ VERSION
   ### AMPLICON SIMULATION VIA BEDFILE
   if (defined $amplicon_bed){
 
-    # Only generating paired-end simulations, the user can always choose to ignore R2
+    # Amplicon mode samples from genomic loci, so it is incompatible with --random
+    if ($random){
+      die "Amplicon simulation (--amplicon_bedfile) cannot be combined with --random mode\n";
+    }
+    # Only generating paired-end simulations (the user can always choose to ignore R2)
     unless ($paired_end){
       die "Amplicon simulation is only available for paired-end simulations\n";
     }
-
-    # Test if the bedfile exists
-     unless (-f $amplicon_bed){
+    unless (-f $amplicon_bed){
       die "The specified amplicon bedfile $amplicon_bed does not exist!\n";
     }
-    
-  
-    open (BED,$amplicon_bed) or die "Failed to open amplicon bedfile $amplicon_bed $!\n";
-    
-    # storing the amplicon coordinates in a hash
+
+    open (BED,$amplicon_bed) or die "Failed to open amplicon bedfile $amplicon_bed: $!\n";
+
+    # storing the amplicon coordinates in a hash; expecting a 4-column, tab-delimited,
+    # 0-based half-open bed: chr <TAB> start <TAB> end <TAB> strand(+/-)
     my $amplicon_count = 0;
-    foreach my $line (<BED>){
-
+    while (my $line = <BED>){
       chomp $line;
+      $line =~ s/\r$//;          # tolerate Windows line endings
+      next unless ($line =~ /\S/);   # skip blank lines
+
+      my @cols = split (/\t/,$line);
+      if (scalar @cols != 4){
+        die "The amplicon bedfile $amplicon_bed does not seem to be in the correct format (4 tab-separated columns required: chr start end strand). Offending line:\n$line\n";
+      }
+      my ($chr,$start,$end,$strand) = @cols;
+      unless ($start =~ /^\d+$/ and $end =~ /^\d+$/){
+        die "The amplicon bedfile $amplicon_bed has non-numeric start/end coordinates. Offending line:\n$line\n";
+      }
+      unless ($strand eq '+' or $strand eq '-'){
+        die "The amplicon strand '$strand' is not in the correct format (+ or -), please adjust the bedfile. Offending line:\n$line\n";
+      }
+      if ($start >= $end){
+        die "The amplicon start ($start) must be smaller than the end ($end). Offending line:\n$line\n";
+      }
       ++$amplicon_count;
-      
-      my @lines = split (/\t/,$line);
-      # Test if the bedfile is in the correct format
-      if (scalar@lines != 4){
-          die "The amplicon bedfile $amplicon_bed does not seem to be in the correct format (4 columns required)\n";
-      }
-      
-      my $chr = $lines[0];
-      my $start = $lines[1];
-      my $end = $lines[2];
-      my $strand = $lines[3];
-
-      if ($strand ne '+' and $strand ne '-'){
-        die "The amplicon strand $strand does not seem to be in the correct format (+  or -), please adjust the format accordingly\n";
-      }
-      else{
-        $amplicons{$amplicon_count} = "$chr:$start:$end:$strand";
-      }
+      $amplicons{$amplicon_count} = "$chr:$start:$end:$strand";
     }
-
     close BED;
-  }
-  else{
-    $amplicon_bed = undef;
+
+    unless ($amplicon_count){
+      die "The amplicon bedfile $amplicon_bed did not contain any valid amplicon loci\n";
+    }
   }
 
   return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,
-  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$bwa_ending,$amplicon_bed);
+  $colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir,$truth_set,$amplicon_bed,$bwa_ending);
 }
 
 sub print_helpfile{
@@ -2204,16 +2145,19 @@ BASIC ATTRIBUTES:
 
 --truth_set                       This option writes out a 'truth set' of positions that underwent bisulfite conversion.
                                   This is not available in --random mode or when the conversion rate is 0. Default: OFF.
-                                  The output format is (tab-delimited): 
+                                  The output format is (tab-delimited):
                                   >> chromosome <<   \t   >> position <<   \t   >> context <<
 
---bwa_ending                      For paired-end reads, have the read IDs follow the scheme of xxx/1 and xxx/2 (instead
-                                  of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners.
+--amplicon_bedfile <file>         Amplicon mode (paired-end only). Instead of sampling random fragments, simulate reads
+                                  for the fixed amplicon loci listed in <file>: read 1 starts at each amplicon start and
+                                  read 2 ends at each amplicon end, sampled equally across all amplicons. The bedfile must
+                                  be tab-delimited with 4 columns: chromosome, start, end, strand (+/-). Coordinates are
+                                  0-based and half-open (as is custom for BED). Supply primer-trimmed coordinates if you do
+                                  not want the primer regions to receive simulated methylation/conversion.
 
---amplicon_bedfile <file.bed>     Simulate reads from the amplicons specified in the bed-style file which needs to
-                                  have 4 columns and be in the following format (tab-delimited):
-                                  >> chromosome <<  >> start <<  >> end <<  >> strand <<
-                                  The strand can be either + or -. '--amplicon' is only available for paired-end reads.
+--bwa_ending                      For paired-end reads, name the read IDs using the BWA-style scheme >> xxx/1 << and
+                                  >> xxx/2 << instead of the default >> xxx_R1 << and >> xxx_R2 <<. This makes the FastQ
+                                  files compatible with BWA-based aligners that expect /1 and /2 mate suffixes. Default: OFF.
 
 
 CONTAMINANTS:
@@ -2250,7 +2194,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 09 July 2024.
+Last update: 11 July 2022.
 
 
 HELP

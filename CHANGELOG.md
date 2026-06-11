@@ -1,16 +1,20 @@
-## v0.1.10dev
+## Unreleased
 
-- Added new option `--bwa_ending` for paired-end reads to have the read IDs follow the scheme of xxx/1 and xxx/2 (instead of xxx_R1 and xxx_R2) to make them compatible with the BWA-based aligners
+### Added
 
-- Added option `--amplicon_bedfile` to only simulate reads from the start and end of amplicons supplied as bedfile. Works for paired-end only (ignore R2 at your leisure)
+- New option `--amplicon_bedfile <file>` (paired-end only): instead of sampling random fragments, simulate reads for the fixed amplicon loci listed in a 4-column, tab-delimited, 0-based half-open BED (chromosome, start, end, strand). Read 1 starts at each amplicon start and read 2 ends at each amplicon end, sampled equally across all amplicons. Truth-set coordinates are correct for both strands, and the bedfile is validated (4 columns, valid strand, `start < end`, amplicon ≥ read length, within-contig). Resolves [#13](https://github.com/FelixKrueger/Sherman/issues/13).
+- New option `--bwa_ending`: for paired-end reads, name read IDs `xxx/1` and `xxx/2` (BWA-style) instead of the default `xxx_R1` / `xxx_R2`, for compatibility with BWA-based aligners. Addresses [#5](https://github.com/FelixKrueger/Sherman/issues/5).
 
-- Fixed a bug where the offset of paired-end reads became negative (this would occasionally happen when the random position + fragment length exceeded the end of a chromosome/scaffold, and would then result in a negative offset for the next chromosome/scaffold
+### Fixed
 
+- **`--truth_set` coordinates are now correct for all read orientations** ([#15](https://github.com/FelixKrueger/Sherman/issues/15)). Previously the logged positions could be off by one (forward reads) or grossly mismapped onto the wrong fragment end / strand (reverse-complemented reads), so a large fraction of `positional_changes.txt` positions landed on reference A/T bases. Positions are now derived per read from a genomic anchor plus a travel direction, and are correct for single-end and paired-end, both strands, both mates, directional and `--non_directional`, uniform and context-specific conversion. The simulated reads themselves are unchanged.
+- **Context-specific conversion (`-CG`/`-CH`) no longer crashes without `--truth_set`** — the `POS_CHANGE` writes are now properly guarded.
+- **Paired-end fragments no longer straddle contig boundaries** on multi-contig genomes, which previously produced reads from the wrong contig and a `--truth_set` crash (`Argument "" isn't numeric`). Such fragments are now rejected and resampled.
 
 ## 11-07-2022: Sherman Version v0.1.9 released
 
-- Added option `--truth_set` to write out a file 'positional_changes.txt' containing chromosome, position and C-context (tab-delimited). More [here](https://github.com/FelixKrueger/Sherman/pull/9)
-
+- Added option `--truth_set` to write out a file 'positional_changes.txt' containing chromosome, position and C-context (tab-delimited). More [here](https://github.com/FelixKrueger/Sherman/pull/9). 
+ 
 ## 16-10-2018: Sherman Version v0.1.8 released
 
 - Fixed the coordinates of extracted paired-end sequences
